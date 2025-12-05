@@ -14,18 +14,18 @@ jobs:
     - name: Checkout del Codigo
       uses: actions/checkout@v4 # Baja el código del repositorio
       
-    - name: Configurar Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.x' # Usa la versión más reciente de Python 3
+    # - name: Configurar Python
+    #  uses: actions/setup-python@v5
+    #  with:
+    #    python-version: '3.x' # Usa la versión más reciente de Python 3
 
     - name: Instalar Dependencias
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt # Instala todas las librerías necesarias (pytest, requests, psycopg2, redis, etc.)
+        python3 -m pip install --upgrade pip
+        pip3 install -r requirements.txt # Instala todas las librerías necesarias (pytest, requests, psycopg2, redis, etc.)
 
     - name: Instalar Pytest-BDD
-      run: pip install pytest-bdd
+      run: pip3 install pytest-bdd
 
     - name: Ejecutar Pruebas de Infraestructura
       run: |
