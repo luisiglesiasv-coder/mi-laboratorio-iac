@@ -1,0 +1,22 @@
+# web.yml
+
+---
+- name: FASE 2 | Configuración del Servidor Web (Nginx)
+  hosts: webservers
+  tasks:
+    - name: 1. Instalar Nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: latest # Asegura la última versión disponible
+        
+    - name: 2. Asegurar que Nginx esté iniciado y habilitado en el arranque
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: yes
+        
+    - name: 3. Desplegar página de índice simple para verificación
+      ansible.builtin.copy:
+        content: "<html><body><h1>¡Servidor Web de Laboratorio Listo!</h1></body></html>"
+        dest: /var/www/html/index.nginx-debian.html
+        mode: '0644'

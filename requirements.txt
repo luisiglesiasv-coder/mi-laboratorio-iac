@@ -1,0 +1,26 @@
+# 1. Herramienta principal de Infraestructura como Código (IaC)
+ansible==9.1.0  
+# (Asegúrate de que la versión sea consistente en todos los entornos. 
+# Si usas Ansible Core, el paquete se llama 'ansible-core' a partir de la v2.11)
+
+# 2. Framework de Pruebas y BDD
+pytest==8.4.2
+pytest-bdd==8.1.0
+
+# 3. Utilidades esenciales para pruebas y Ansible
+# Usado para peticiones HTTP/Web. Lo usamos en test_servers.py
+requests
+# La versión 1.26.0 de urllib3 es compatible con LibreSSL de Mac, 
+# mitigando el 'NotOpenSSLWarning' que vimos.
+# Esta es la mejor solución ya que requests depende de urllib3.
+urllib3<2.0
+
+# 4. Extensiones y utilidades para interactuar con infraestructura
+# Módulos para trabajar con inventarios YAML, JSON, etc.
+PyYAML
+
+# Si necesitas validar conexiones reales a PostgreSQL (más robusto que el socket simulado)
+# psycopg2-binary es la versión precompilada, más fácil de instalar en Mac y Ubuntu
+psycopg2-binary
+
+redis

@@ -1,0 +1,13 @@
+# .gitignore
+
+# Entorno virtual
+venv/
+.env
+
+# Cachés de Pytest
+.pytest_cache/
+.pytest_cache/
+
+# Cachés de Python
+__pycache__/
+*.pyc

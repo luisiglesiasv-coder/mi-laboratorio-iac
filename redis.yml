@@ -1,0 +1,41 @@
+# redis.yml
+
+---
+- name: FASE 4 | Instalación y Configuración del Servidor de Caché (Redis)
+  hosts: webservers # Ejecutar en el web-node
+  become: true
+  
+  tasks:
+    - name: 1. Instalar el paquete Redis Server
+      ansible.builtin.apt:
+        name: redis-server
+        state: present
+        update_cache: yes
+        
+    - name: 2. Asegurar que el servicio Redis esté iniciado y habilitado
+      ansible.builtin.service:
+        name: redis-server
+        state: started
+        enabled: yes
+
+    - name: 3. Modificar la configuración de Redis para escuchar en todas las interfaces (0.0.0.0)
+      ansible.builtin.lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: '^bind 127.0.0.1 ::1' # Busca la línea de binding actual
+        line: 'bind 0.0.0.0'         # La reemplaza para escuchar en todas las IPs
+        backup: yes
+      notify: Reiniciar Redis
+
+    - name: 4. Desactivar protected-mode para permitir conexiones externas
+      ansible.builtin.lineinfile:
+        path: /etc/redis/redis.conf
+        regexp: '^protected-mode yes'
+        line: 'protected-mode no'
+        backup: yes
+      notify: Reiniciar Redis
+
+  handlers:
+    - name: Reiniciar Redis
+      ansible.builtin.service:
+        name: redis-server
+        state: restarted

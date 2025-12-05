@@ -1,0 +1,18 @@
+# common.yml
+
+---
+- name: FASE 2 | Tareas de configuración general para todos los nodos
+  hosts: all
+  tasks:
+    - name: Actualizar caché de paquetes APT
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600 # Válido por 1 hora
+
+    - name: Instalar paquetes básicos de administración (curl, htop, vim)
+      ansible.builtin.apt:
+        name:
+          - curl
+          - htop
+          - vim
+        state: present
