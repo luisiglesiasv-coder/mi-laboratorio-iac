@@ -4,9 +4,9 @@ name: Ejecutar Pruebas de Infraestructura (CI)
 
 on:
   push:
-    branches: [ main ] # Ejecutar cuando se haga push a la rama 'main'
+    branches: [ main ] 
 
-obs:
+jobs:
   test_infrastructure:
     runs-on: self-hosted 
     
@@ -20,16 +20,12 @@ obs:
         sudo apt-get update
         sudo apt-get install -y python3-pip python3-venv 
         
-    - name: 🚨 Configurar y activar el entorno virtual 🚨
+    - name: Configurar y activar el entorno virtual
       run: |
         # 1. Crear el entorno virtual llamado venv-ci
         python3 -m venv venv-ci
         
-        # 2. Activar el entorno virtual para los siguientes comandos
-        # NOTA: En GitHub Actions, la activación estándar 'source' a veces falla.
-        # Es más fiable usar la ruta absoluta a los ejecutables.
-        
-        # 3. Actualizar Pip e instalar dependencias dentro del VENV
+        # 2. Actualizar Pip e instalar dependencias dentro del VENV
         ./venv-ci/bin/pip install --upgrade pip
         ./venv-ci/bin/pip install -r requirements.txt 
 
