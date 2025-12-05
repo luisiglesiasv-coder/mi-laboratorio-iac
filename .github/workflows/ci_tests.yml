@@ -6,7 +6,7 @@ on:
   push:
     branches: [ main ] # Ejecutar cuando se haga push a la rama 'main'
 
-jobs:
+obs:
   test_infrastructure:
     runs-on: self-hosted 
     
@@ -14,17 +14,25 @@ jobs:
     - name: Checkout del Codigo
       uses: actions/checkout@v4 
       
-    - name: 🚨 Instalar paquetes esenciales de Python 🚨
+    - name: Instalar paquetes esenciales de Python
       run: |
-        # Necesario si pip no viene instalado por defecto con python3
+        # Garantizamos que venv y pip estén disponibles en el sistema
         sudo apt-get update
         sudo apt-get install -y python3-pip python3-venv 
         
-    - name: Instalar Dependencias (Usando el Python/Pip del sistema)
+    - name: 🚨 Configurar y activar el entorno virtual 🚨
       run: |
-        # Ahora pip3 existe y puede ser usado
-        python3 -m pip install --upgrade pip
-        pip3 install -r requirements.txt 
+        # 1. Crear el entorno virtual llamado venv-ci
+        python3 -m venv venv-ci
+        
+        # 2. Activar el entorno virtual para los siguientes comandos
+        # NOTA: En GitHub Actions, la activación estándar 'source' a veces falla.
+        # Es más fiable usar la ruta absoluta a los ejecutables.
+        
+        # 3. Actualizar Pip e instalar dependencias dentro del VENV
+        ./venv-ci/bin/pip install --upgrade pip
+        ./venv-ci/bin/pip install -r requirements.txt 
 
     - name: Ejecutar Pruebas de Infraestructura
-      run: pytest -v tests/features
+      # Usar el ejecutable de pytest DENTRO del entorno virtual
+      run: ./venv-ci/bin/pytest -v tests/features
