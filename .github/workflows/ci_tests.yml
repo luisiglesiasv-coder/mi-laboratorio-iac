@@ -8,26 +8,23 @@ on:
 
 jobs:
   test_infrastructure:
-    runs-on: self-hosted # Usa la etiqueta 'self-hosted' para apuntar a tu runner
+    runs-on: self-hosted 
     
     steps:
     - name: Checkout del Codigo
-      uses: actions/checkout@v4 # Baja el código del repositorio
+      uses: actions/checkout@v4 
       
-    # - name: Configurar Python
-    #  uses: actions/setup-python@v5
-    #  with:
-    #    python-version: '3.x' # Usa la versión más reciente de Python 3
-
-    - name: Instalar Dependencias
+    - name: 🚨 Instalar paquetes esenciales de Python 🚨
       run: |
+        # Necesario si pip no viene instalado por defecto con python3
+        sudo apt-get update
+        sudo apt-get install -y python3-pip python3-venv 
+        
+    - name: Instalar Dependencias (Usando el Python/Pip del sistema)
+      run: |
+        # Ahora pip3 existe y puede ser usado
         python3 -m pip install --upgrade pip
-        pip3 install -r requirements.txt # Instala todas las librerías necesarias (pytest, requests, psycopg2, redis, etc.)
-
-    - name: Instalar Pytest-BDD
-      run: pip3 install pytest-bdd
+        pip3 install -r requirements.txt 
 
     - name: Ejecutar Pruebas de Infraestructura
-      run: |
-        # Usamos el comando que ya validaste localmente
-        pytest -v tests/features
+      run: pytest -v tests/features
