@@ -8,7 +8,7 @@ on:
 
 jobs:
   test_infrastructure:
-    runs-on: ubuntu-latest # El Runner (máquina virtual) que ejecutará la prueba
+    runs-on: self-hosted # Usa la etiqueta 'self-hosted' para apuntar a tu runner
     
     steps:
     - name: Checkout del Codigo
