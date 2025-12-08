@@ -44,7 +44,7 @@ jobs:
         env:
           VAULT_ADDR: http://10.0.0.31:8200
           # Usaremos el token root fijo para IaC. En producción, usa VAULT_TOKEN de AppRole.
-          VAULT_TOKEN: hvs.TlA2xCHPWSebAjrI9NTnxI3G
+          VAULT_TOKEN: ${{ secrets.VAULT_ROOT_TOKEN }}
         run: |
           echo "VAULT_ADDR=$VAULT_ADDR"
 
@@ -81,4 +81,3 @@ jobs:
           export DB_HOST=10.0.0.31
           behave tests/features/
 
-          
