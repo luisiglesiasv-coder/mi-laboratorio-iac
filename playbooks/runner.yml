@@ -25,8 +25,7 @@
           - hvac
           - behave
           - psycopg2-binary
-          - request
-          - jason
+          - requests
           - pytest
           - redis
         state: present
