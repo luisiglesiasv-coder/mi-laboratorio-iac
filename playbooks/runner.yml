@@ -25,6 +25,7 @@
           - hvac
           - behave
           - psycopg2-binary
+          - redis
         state: present
         virtualenv: /opt/bdd_venv 
 
