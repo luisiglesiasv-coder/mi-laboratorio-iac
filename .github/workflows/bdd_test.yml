@@ -11,13 +11,27 @@ jobs:
       - name: Checkout del Código
         uses: actions/checkout@v4
 
-      # 🔑 NUEVO PASO CRÍTICO: Instalar el cliente Vault CLI
-      - name: Instalar Vault CLI
-        uses: hashicorp/setup-terraform@v3 # Esta acción sirve para Vault también
-        with:
-          cli_config_path: ${{ github.repository_path }}
-          cli_version: 1.16.0 # Versión reciente y estable
-          # Nota: Esta acción automáticamente añade el binario 'vault' al PATH
+      # 🔑 NUEVO PASO CRÍTICO: Descargar e Instalar Vault CLI manualmente
+      - name: Instalar Vault CLI (Descarga Manual)
+        shell: bash
+        run: |
+          # 1. Definir la versión y la arquitectura
+          VAULT_VERSION="1.16.0"
+          
+          # 2. Descargar el archivo ZIP de HashiCorp (asumiendo Runner Linux x64)
+          # Si tu runner es macOS o Windows, cambia la URL.
+          URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"
+          echo "Descargando Vault CLI desde: $URL"
+          
+          # Descargar y descomprimir
+          curl -LO "$URL"
+          unzip vault_${VAULT_VERSION}_linux_amd64.zip
+          
+          # 3. Mover el ejecutable a un directorio que esté en el PATH
+          # (En muchos runners self-hosted, /usr/local/bin funciona)
+          sudo mv vault /usr/local/bin/
+          
+          echo "✅ Cliente Vault (v$VAULT_VERSION) instalado en /usr/local/bin/"
       
           # ----------------------------------------------------
       # 🔑 PASOS CRÍTICOS: Obtener Credenciales de Vault
