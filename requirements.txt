@@ -24,3 +24,4 @@ PyYAML
 psycopg2-binary
 
 redis
+hvac

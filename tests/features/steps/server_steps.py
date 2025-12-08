@@ -3,18 +3,42 @@
 import requests
 import psycopg2
 import redis
+import os # <-- ¡Nuevo! Necesario para leer variables de entorno
 from behave import given, when, then
 from behave.runner import Context
 import pytest
 
 # --- CONFIGURACIÓN (Ajustar si es necesario) ---
-# En un entorno real, estos serían variables de entorno o configuraciones de Pytest/Conftest
-POSTGRES_HOST = '10.0.0.31' 
-POSTGRES_DB = 'postgres'
-POSTGRES_USER = 'postgres'
-# NOTA: La contraseña DEBE ser la que usaste en Ansible y Vault
-POSTGRES_PASSWORD = 'secure_password_123' 
+# Ahora dependemos de variables de entorno (DB_HOST, DB_USER, DB_PASS, DB_NAME)
+# Las siguientes constantes SÓLO se usan como valor por defecto si la variable de entorno no existe.
+WEB_ADDRESS = 'http://10.0.0.31'
 REDIS_HOST = '10.0.0.31'
+
+
+# --- FUNCIÓN AUXILIAR DE CONEXIÓN A DB (USANDO VAULT SECRETS) ---
+
+def connect_to_db(context: Context, database_name: str):
+    """Establece una conexión a PostgreSQL usando credenciales dinámicas de Vault."""
+    try:
+        # Recuperar credenciales del entorno (establecidas por bdd_test.yml)
+        host = os.environ.get('DB_HOST', WEB_ADDRESS) # Fallback al host de la app
+        user = os.environ.get('DB_USER')
+        password = os.environ.get('DB_PASS')
+
+        if not user or not password:
+            pytest.fail("Error: Las variables de entorno DB_USER o DB_PASS no fueron establecidas. ¿Falló Vault?")
+
+        # Intentar la conexión
+        context.pg_conn = psycopg2.connect(
+            host=host,
+            database=database_name,
+            user=user,
+            password=password
+        )
+        context.pg_conn.autocommit = True
+    except Exception as e:
+        # Almacenar el error en el contexto para que el paso 'then' pueda verificarlo
+        context.pg_conn = e
 
 
 # --- PASOS DE WEB (Nginx) ---
@@ -47,32 +71,35 @@ def step_then_response_must_be_200(context: Context):
 
 @given('los parámetros de conexión a PostgreSQL')
 def step_given_postgres_params(context: Context):
-    """Configura los parámetros para la conexión a PostgreSQL."""
-    context.pg_params = {
-        'host': POSTGRES_HOST,
-        'database': POSTGRES_DB,
-        'user': POSTGRES_USER,
-        'password': POSTGRES_PASSWORD
-    }
-    context.pg_conn = None
+    """
+    Este paso ya no configura solo los parámetros, sino que intenta la conexión 
+    usando la función auxiliar y las credenciales dinámicas.
+    """
+    # Intentamos conectar a la base de datos 'app_db' (nombre común de aplicación)
+    # Si quieres probar la conexión al sistema, usa 'postgres'
+    connect_to_db(context, database_name='postgres') 
 
 @when('intento establecer una conexión con la base de datos')
 def step_when_try_postgres_connection(context: Context):
-    """Intenta conectar a PostgreSQL."""
-    try:
-        context.pg_conn = psycopg2.connect(**context.pg_params)
-    except Exception as e:
-        context.pg_conn = e # Almacena el error si falla
+    """
+    Este paso ahora está vacío porque la conexión se intenta en el paso 'given' 
+    para poder pasar el estado de la conexión al paso 'then'.
+    """
+    pass # La lógica fue movida a step_given_postgres_params
 
 
 @then('la conexión debe ser exitosa')
 def step_then_postgres_connection_successful(context: Context):
     """Verifica si la conexión se estableció correctamente."""
+    # Si context.pg_conn es una excepción, fallamos
     if isinstance(context.pg_conn, Exception):
-        pytest.fail(f"Fallo al conectar a PostgreSQL: {context.pg_conn}")
+        pytest.fail(f"Fallo al conectar a PostgreSQL con credenciales de Vault: {context.pg_conn}")
         
     assert context.pg_conn is not None, "La conexión a PostgreSQL no se pudo establecer."
-    context.pg_conn.close() # Cerrar la conexión
+    
+    # Si la conexión es exitosa, la cerramos limpiamente
+    if context.pg_conn and not isinstance(context.pg_conn, Exception):
+        context.pg_conn.close() 
 
 
 # --- PASOS DE CACHE (Redis) ---

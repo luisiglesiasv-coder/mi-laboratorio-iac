@@ -1,39 +1,58 @@
-# .github/workflows/bdd_test.yml
+name: BDD Test Workflow
 
-name: BDD Testing with Vault Integration
+on: [push]
 
-# 1. Disparador (Trigger)
-# Este workflow se ejecutará cuando hagas push a la rama principal (main/master)
-on:
-  push:
-    branches:
-      - main 
-
-# 2. Definición de Tareas (Jobs)
 jobs:
-  bdd_runner:
-    # 3. Especificar el Runner Autohospedado
-    # Esta etiqueta dirige la tarea a tu 'my-ansible-runner'
-    runs-on: self-hosted 
-
-    # 4. Configurar Variables de Entorno y Ejecutar Pruebas
+  bdd_tests:
+    runs-on: self-hosted # O la etiqueta de tu Runner (ej. web-node)
+    
     steps:
-      - name: Checkout del código
-        # Descarga el código del repositorio en el runner
+    
+      - name: Checkout del Código
         uses: actions/checkout@v4
 
-      - name: 5. Configurar Variables de Entorno de Vault
-        # Utiliza secretos de GitHub Actions para inyectar las credenciales
-        # para que hvac se conecte a Vault. 
+      # ----------------------------------------------------
+      # 🔑 PASOS CRÍTICOS: Obtener Credenciales de Vault
+      # ----------------------------------------------------
+      - name: Configurar Variables de Vault y Obtener Credenciales Dinámicas
+        id: vault_creds
+        shell: bash
+        env:
+          VAULT_ADDR: http://10.0.0.31:8200
+          # Usaremos el token root fijo para IaC. En producción, usa VAULT_TOKEN de AppRole.
+          VAULT_TOKEN: hvs.TlA2xCHPWSebAjrI9NTnxI3G
         run: |
-          echo "VAULT_ADDR=${{ secrets.VAULT_ADDRESS }}" >> $GITHUB_ENV
-          echo "VAULT_TOKEN=${{ secrets.VAULT_TOKEN_SECRET }}" >> $GITHUB_ENV
-        
-      - name: 6. Ejecutar las pruebas BDD con Behave
+          echo "VAULT_ADDR=$VAULT_ADDR"
+
+          # 1. Leer el secreto dinámico de la DB
+          SECRET_DATA=$(vault read -format=json database/creds/runner_role)
+          
+          # 2. Parsear el JSON y exportar las variables
+          DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
+          DB_PASS=$(echo "$SECRET_DATA" | jq -r '.data.password')
+          
+          # 3. Exportar variables a GitHub Actions Runner
+          # Esto hace que DB_USER y DB_PASS estén disponibles para pasos posteriores
+          echo "DB_USER=$DB_USER" >> $GITHUB_ENV
+          echo "DB_PASS=$DB_PASS" >> $GITHUB_ENV
+          
+          echo "✅ Credenciales dinámicas obtenidas."
+
+      - name: Instalar Dependencias de Python
         run: |
-          # Activamos el entorno virtual creado por Ansible
-          source /opt/bdd_venv/bin/activate
-          # Ejecutamos behave, el cual usará VAULT_ADDR y VAULT_TOKEN
-          # para que las pruebas de conexión a Vault funcionen.
-          behave tests/features
-# FIN DEL workflow
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+          
+      # ----------------------------------------------------
+      # 🚀 EJECUTAR PRUEBAS
+      # ----------------------------------------------------
+      - name: Ejecutar Pruebas BDD Behave
+        shell: bash
+        # Las variables DB_USER y DB_PASS ahora están disponibles automáticamente
+        run: |
+          source venv/bin/activate
+          # El código Python de la prueba debe leer las variables de entorno:
+          # os.environ.get('DB_USER'), os.environ.get('DB_PASS'), os.environ.get('DB_HOST')
+          export DB_HOST=10.0.0.31
+          behave features/
