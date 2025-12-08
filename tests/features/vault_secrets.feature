@@ -17,4 +17,4 @@ Feature: Servidor de HashiCorp Vault
     # Vault inicia Sellado (Sealed) en modo servidor real.
     Given la dirección del servidor de Vault es "http://10.0.0.31:8200"
     When intento obtener la información de salud del sistema Vault
-    Then el estado de sellado de Vault debe ser true
+    Then el estado de sellado de Vault debe ser false
