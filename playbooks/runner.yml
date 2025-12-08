@@ -25,6 +25,9 @@
           - hvac
           - behave
           - psycopg2-binary
+          - request
+          - jason
+          - pytest
           - redis
         state: present
         virtualenv: /opt/bdd_venv 
