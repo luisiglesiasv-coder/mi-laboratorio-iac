@@ -1,28 +1,45 @@
-Documentación del Proyecto - Fase 0: Planificación y Configuración Inicial del Entorno
+# Documentación del Proyecto - Fase 0: Planificación y Configuración Inicial del Entorno
 Este documento detalla los aspectos relevantes de la configuración inicial del entorno y las herramientas utilizadas, permitiendo la reproducibilidad de la fase de planificación y aprovisionamiento.
-1. Planificación de la Arquitectura
-Se ha diseñado una arquitectura de tres niveles, con un controlador local (máquina de desarrollo) y varios servidores remotos.
-1.1. Especificaciones de Hardware y Software Base
-Los equipos utilizados son máquinas virtuales (VMs) o servidores con las siguientes especificaciones mínimas:
-Rol del Nodo	Sistema Operativo Base	Especificaciones Mínimas	Servicios Instalados Inicialmente
-Controlador (Local)	macOS (Ventura/Sonoma)	8GB RAM, 4 Cores	VS Code, Git, Python 3.11+, Homebrew
-Servidor Vault & DB	Ubuntu 22.04 LTS	4GB RAM, 2 Cores	HashiCorp Vault, PostgreSQL
-Servidores de Aplicación (x2)	Ubuntu 22.04 LTS	4GB RAM, 2 Cores	Nginx, Redis
-1.2. Esquema de Direccionamiento IP
-Los servidores remotos operan en una subred privada. El controlador se conecta a ellos a través de un gateway o VPN (no especificado aquí, pero asumido).
-Rol del Nodo	Dirección IP	Notas
-Servidor Vault & DB	10.0.0.31	Punto central para DB y secretos.
-Servidores de Aplicación	10.0.0.32, 10.0.0.33	Direcciones de ejemplo; el controlador se conecta vía Ansible SSH.
-2. Configuración del Entorno de Desarrollo Local
-Esta sección detalla la configuración de las herramientas de desarrollo en el Controlador Local (macOS).
-2.1. Herramientas de Línea de Comandos
-Se recomienda el uso de Homebrew para la gestión de paquetes en macOS.
-Herramienta	Versión Utilizada	Notas de Instalación
-Git	2.4+	Instalado por defecto con Xcode Command Line Tools o Homebrew (brew install git).
-Python	3.11.x	Instalado vía Homebrew: brew install python@3.11.
-curl / unzip	N/A	Utilidades estándar presentes en macOS.
-pip y venv	N/A	Gestionados a través de la instalación de Python.
-2.2. Configuración de VS Code y Extensiones
+
+**1. Planificación de la Arquitectura**
+  Se ha diseñado una arquitectura de tres niveles, con un controlador local (máquina de desarrollo) y varios servidores remotos.
+
+    1.1. Especificaciones de Hardware y Software Base
+    Los equipos utilizados son máquinas virtuales (VMs) o servidores con las siguientes especificaciones mínimas:
+    
+    | Rol del Nodo	| Sistema Operativo Base |	Especificaciones Mínimas |	Servicios Instalados Inicialmente |
+    |:------------- |:---------------------- |:------------------------- |:---------------------------------- |
+    | Controlador (Local)	| macOS (Ventura/Sonoma)	| 8GB RAM, 4 Cores	| VS Code, Git, Python 3.11+, Homebrew |
+
+    
+    Servidor Vault & DB	Ubuntu 22.04 LTS	4GB RAM, 2 Cores	HashiCorp Vault, PostgreSQL
+    Servidores de Aplicación (x2)	Ubuntu 22.04 LTS	4GB RAM, 2 Cores	Nginx, Redis } 
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/a3bfefa6-d4b9-45f5-9c65-23010328af57" />
+
+    1.2. Esquema de Direccionamiento IP
+    Los servidores remotos operan en una subred privada. El controlador se conecta a ellos a través de un gateway o VPN (no especificado aquí, pero asumido).
+    
+    |Rol del Nodo	| Dirección IP	| Notas|
+    |:---|:---|:---|
+    Servidor Vault & DB	10.0.0.31	Punto central para DB y secretos.
+    Servidores de Aplicación	10.0.0.32, 10.0.0.33	Direcciones de ejemplo; el controlador se conecta vía Ansible SSH.}
+    
+ **2. Configuración del Entorno de Desarrollo Local**
+   Esta sección detalla la configuración de las herramientas de desarrollo en el Controlador Local (macOS).
+
+    2.1. Herramientas de Línea de Comandos
+    Se recomienda el uso de Homebrew para la gestión de paquetes en macOS.
+
+
+
+    
+    Herramienta	Versión Utilizada	Notas de Instalación
+    Git	2.4+	Instalado por defecto con Xcode Command Line Tools o Homebrew (brew install git).
+    Python	3.11.x	Instalado vía Homebrew: brew install python@3.11.
+    curl / unzip	N/A	Utilidades estándar presentes en macOS.
+    pip y venv	N/A	Gestionados a través de la instalación de Python.
+    
+    2.2. Configuración de VS Code y Extensiones
 Se configuró Visual Studio Code como IDE principal.
 Extensión	ID de Extensión	Propósito
 YAML	redhat.vscode-yaml	Validación y linting de archivos YAML (playbooks, ansible.cfg).
