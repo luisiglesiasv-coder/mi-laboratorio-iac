@@ -1,0 +1,38 @@
+# .github/workflows/bdd_test.yml
+
+name: BDD Testing with Vault Integration
+
+# 1. Disparador (Trigger)
+# Este workflow se ejecutará cuando hagas push a la rama principal (main/master)
+on:
+  push:
+    branches:
+      - main 
+
+# 2. Definición de Tareas (Jobs)
+jobs:
+  bdd_runner:
+    # 3. Especificar el Runner Autohospedado
+    # Esta etiqueta dirige la tarea a tu 'my-ansible-runner'
+    runs-on: self-hosted 
+
+    # 4. Configurar Variables de Entorno y Ejecutar Pruebas
+    steps:
+      - name: Checkout del código
+        # Descarga el código del repositorio en el runner
+        uses: actions/checkout@v4
+
+      - name: 5. Configurar Variables de Entorno de Vault
+        # Utiliza secretos de GitHub Actions para inyectar las credenciales
+        # para que hvac se conecte a Vault.
+        run: |
+          echo "VAULT_ADDR=${{ secrets.VAULT_ADDRESS }}" >> $GITHUB_ENV
+          echo "VAULT_TOKEN=${{ secrets.VAULT_TOKEN_SECRET }}" >> $GITHUB_ENV
+        
+      - name: 6. Ejecutar las pruebas BDD con Behave
+        run: |
+          # Activamos el entorno virtual creado por Ansible
+          source /opt/bdd_venv/bin/activate
+          # Ejecutamos behave, el cual usará VAULT_ADDR y VAULT_TOKEN
+          # para que las pruebas de conexión a Vault funcionen.
+          behave tests/features

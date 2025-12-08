@@ -1,0 +1,95 @@
+---
+- name: ⚙️ Configurar HashiCorp Vault como servicio persistente (Binario Oficial)
+  hosts: db-node
+  become: yes
+  vars:
+    vault_version: "1.18.1" # Versión estable
+    vault_zip_url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+    vault_bin_path: "/usr/local/bin/vault"
+    vault_config_path: /etc/vault.d/vault.hcl
+    vault_data_path: /var/lib/vault/data
+    vault_bind_addr: "0.0.0.0:8200"
+
+  tasks:
+    # 0. Limpieza: Eliminar Snap si existe para evitar conflictos
+    - name: 0. Eliminar Vault Snap (Limpieza)
+      community.general.snap:
+        name: vault
+        state: absent
+
+    # 1. Gestión de Usuarios y Grupos
+    - name: 1.1. Asegurar la existencia del grupo 'vault'
+      ansible.builtin.group:
+        name: vault
+        system: yes
+        state: present
+
+    - name: 1.2. Asegurar la existencia del usuario 'vault'
+      ansible.builtin.user:
+        name: vault
+        group: vault
+        shell: /sbin/nologin
+        system: yes
+        state: present
+
+    # 2. Instalación del Binario
+    - name: 2.1. Instalar unzip (necesario para descomprimir)
+      ansible.builtin.apt:
+        name: unzip
+        state: present
+        update_cache: yes
+
+    - name: 2.2. Descargar y Descomprimir Vault oficial
+      ansible.builtin.unarchive:
+        src: "{{ vault_zip_url }}"
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: '0755'
+        owner: root
+        group: root
+        creates: "{{ vault_bin_path }}" # Solo ejecuta si no existe
+
+    # 3. Configuración
+    - name: 3.1. Crear directorios de Vault
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: vault
+        group: vault
+        mode: '0755'
+      loop:
+        - /etc/vault.d
+        - "{{ vault_data_path }}"
+
+    - name: 3.2. Crear el archivo de configuración vault.hcl
+      ansible.builtin.template:
+        src: ../templates/vault.hcl.j2
+        dest: "{{ vault_config_path }}"
+        owner: vault
+        group: vault
+        mode: '0644'
+      notify: Reiniciar Vault
+
+    - name: 3.3. Copiar el archivo de servicio systemd
+      ansible.builtin.copy:
+        src: ../files/vault.service
+        dest: /etc/systemd/system/vault.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reiniciar Vault
+
+    # 4. Servicio
+    - name: 4. Iniciar y Habilitar Vault
+      ansible.builtin.systemd:
+        name: vault
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+  handlers:
+    - name: Reiniciar Vault
+      ansible.builtin.systemd:
+        name: vault
+        state: restarted
+        daemon_reload: yes

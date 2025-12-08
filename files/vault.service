@@ -1,0 +1,19 @@
+[Unit]
+Description="HashiCorp Vault - A secure secrets management framework"
+Documentation=https://www.vaultproject.io/docs/
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+User=vault
+Group=vault
+# CAMBIO CLAVE: Usamos la ruta estándar de Linux, no Snap
+ExecStart=/usr/local/bin/vault server -config=/etc/vault.d/vault.hcl
+ExecReload=/bin/kill -HUP $MAINPID
+LimitMEMLOCK=infinity
+# CAP_IPC_LOCK es necesario para que Vault bloquee memoria (mlock)
+AmbientCapabilities=CAP_IPC_LOCK
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

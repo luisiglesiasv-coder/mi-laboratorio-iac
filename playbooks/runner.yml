@@ -1,0 +1,93 @@
+- name: CONFIGURAR AGENTE DE PRUEBAS (SELF-HOSTED RUNNER)
+  hosts: runner_host
+  become: yes
+  tasks:
+    # Tareas de Dependencias 1-3:
+    - name: 1. Instalar dependencias del sistema operativo y librerías de conexión
+      ansible.builtin.apt:
+        name: 
+          - python3-pip
+          - git
+          - curl
+          - libpq-dev 
+          - python3-venv 
+        state: present
+        update_cache: yes
+
+    - name: 2. Crear el entorno virtual para las pruebas BDD
+      ansible.builtin.command: python3 -m venv /opt/bdd_venv
+      args:
+        creates: /opt/bdd_venv/bin/pip
+
+    - name: 3. Instalar librerías Python (Vault Client y BDD Framework)
+      ansible.builtin.pip:
+        name: 
+          - hvac
+          - behave
+          - psycopg2-binary
+        state: present
+        virtualenv: /opt/bdd_venv 
+
+    # --- Configuración del Agente GitHub ---
+
+    - name: 4. Crear usuario de sistema 'gitrunner' sin shell
+      ansible.builtin.user:
+        name: gitrunner
+        shell: /usr/sbin/nologin
+        state: present
+
+    # Tarea corregida (Ahora es 5): Creamos el directorio con el dueño correcto.
+    - name: 5. Crear directorio /opt/actions-runner con dueño gitrunner
+      ansible.builtin.file:
+        path: /opt/actions-runner
+        state: directory
+        owner: gitrunner 
+        group: gitrunner
+        mode: '0755'
+    
+    # Tarea corregida (Ahora es 6): Descargar el binario con el dueño correcto.
+    - name: 6. Descargar y configurar el agente de GitHub
+      ansible.builtin.unarchive:
+        src: https://github.com/actions/runner/releases/download/v2.329.0/actions-runner-linux-x64-2.329.0.tar.gz
+        dest: /opt/actions-runner
+        remote_src: yes
+        owner: gitrunner 
+        group: gitrunner 
+    
+    # Tarea corregida (Ahora es 7): El fix para el error "Must not run with sudo"
+    - name: 7. Registrar el runner con GitHub
+      ansible.builtin.command: |
+        /opt/actions-runner/config.sh \
+          --url https://github.com/luisiglesiasv-coder/mi-laboratorio-iac \
+          --token BYJZ26KIQ7UFGPENXMLZ7PTJG2SES \
+          --name my-ansible-runner \
+          --unattended
+      args:
+        chdir: /opt/actions-runner
+        # ⬅️ FIX: El registro solo se ejecuta si el archivo .runner NO existe.
+        creates: /opt/actions-runner/.runner
+      become_user: gitrunner # ⬅️ ESTE ES EL FIX PRINCIPAL
+
+      # ⬅️ TAREA Copiar el archivo de definición del servicio
+    - name: 8. Copiar template del servicio systemd
+      ansible.builtin.template:
+        src: ../templates/runner.service.j2 # Apunta al archivo creado arriba
+        dest: /etc/systemd/system/actions.runner.my-ansible-runner.service
+        owner: root
+        mode: '0644'
+      # Necesitas notificar a systemd sobre el nuevo archivo
+      notify: Recargar systemd
+
+    # Tarea Final (Ahora es 9): Crear y lanzar el servicio systemd.
+    # Nota: Usamos un template para asegurar que corra como el usuario correcto.
+    - name: 9. Crear y habilitar el servicio systemd del runner
+      ansible.builtin.systemd:
+        name: actions.runner.my-ansible-runner.service
+        state: started
+        enabled: yes
+
+
+  handlers:
+    - name: Recargar systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

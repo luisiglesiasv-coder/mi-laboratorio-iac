@@ -1,0 +1,16 @@
+# templates/runner.service.j2
+
+[Unit]
+Description=GitHub Actions Runner (my-ansible-runner)
+After=network.target
+
+[Service]
+# Este servicio debe correr con el usuario creado por Ansible
+User=gitrunner
+WorkingDirectory=/opt/actions-runner
+ExecStart=/opt/actions-runner/run.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

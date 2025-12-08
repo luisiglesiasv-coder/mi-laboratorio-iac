@@ -1,0 +1,49 @@
+---
+- name: DESINSTALAR Y LIMPIAR GITHUB SELF-HOSTED RUNNER
+  hosts: runner_host
+  become: yes
+  tasks:
+    # --- Tareas de Desinstalación del Servicio ---
+
+    - name: 1. Detener y deshabilitar el servicio systemd del runner
+      ansible.builtin.systemd:
+        name: actions.runner.my-ansible-runner.service
+        state: stopped
+        enabled: no
+      ignore_errors: yes # Permitir que falle si el servicio nunca se creó
+
+    - name: 2. Desconfigurar el runner (Eliminar de GitHub y archivos locales)
+      ansible.builtin.command: /opt/actions-runner/config.sh remove --unattended
+      args:
+        chdir: /opt/actions-runner
+      become_user: gitrunner
+      ignore_errors: yes # Permitir que falle si ya estaba desconfigurado
+      
+    - name: 3. Eliminar el archivo de servicio systemd
+      ansible.builtin.file:
+        path: /etc/systemd/system/actions.runner.my-ansible-runner.service
+        state: absent
+      notify: Recargar systemd # Notificamos para que systemd olvide el archivo
+
+    # --- Tareas de Limpieza de Archivos y Usuarios ---
+
+    - name: 4. Eliminar el directorio de instalación del agente (/opt/actions-runner)
+      ansible.builtin.file:
+        path: /opt/actions-runner
+        state: absent
+
+    - name: 5. Eliminar el usuario 'gitrunner'
+      ansible.builtin.user:
+        name: gitrunner
+        state: absent
+        remove: yes # Elimina también el directorio home si se creó
+
+    - name: 6. Eliminar el entorno virtual de las pruebas BDD
+      ansible.builtin.file:
+        path: /opt/bdd_venv
+        state: absent
+
+  handlers:
+    - name: Recargar systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

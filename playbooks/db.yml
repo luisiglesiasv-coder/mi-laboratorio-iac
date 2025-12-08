@@ -1,0 +1,60 @@
+## db.yml
+
+---
+- name: FASE 2 | Configuración del Servidor de Base de Datos (PostgreSQL)
+  hosts: db-node  # Usamos el host donde reside Vault/PostgreSQL
+  become: true  
+  vars:
+    # **REEMPLAZA ESTO CON TU TOKEN RAÍZ INICIAL GUARDADO -- solo para demo en prod se usara un token restringido**
+    vault_token: "hvs.TlA2xCHPWSebAjrI9NTnxI3G"
+    
+  tasks:
+    
+    # 1. Leer el secreto de Vault
+    - name: 1. Leer contraseña de Vault
+      ansible.builtin.uri:
+        url: http://10.0.0.31:8200/v1/kv/production/db # Nota: usamos /data/ para KV v2
+        method: GET
+        headers:
+          X-Vault-Token: "{{ vault_token }}"
+      register: db_secret
+
+    
+    - name: (CLEANUP) Eliminar directorio temporal conflictivo para postgres
+      ansible.builtin.file:
+        path: /var/lib/postgresql/.ansible
+        state: absent
+      become: true
+
+    - name: 2. Instalar PostgreSQL y librería para Python
+      ansible.builtin.apt:
+        name: 
+          - postgresql
+          - python3-psycopg2 # Librería Python para interactuar con la DB
+        state: present
+        update_cache: yes
+    
+    - name: 3. Asegurar que PostgreSQL esté corriendo
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: yes
+    
+    # 4. Crear usuario de base de datos usando la contraseña de Vault
+    - name: '4. Crear usuario de base de datos (Ejemplo: app_user)' 
+      ansible.builtin.postgresql_user:
+        login_user: postgres
+        name: app_user
+        # ✅ USO CORRECTO DE LA CONTRASEÑA DE VAULT
+        password: "{{ db_secret.json.data.password }}" 
+        state: present
+      become_user: postgres
+      
+    - name: '5. Crear la base de datos de la aplicación (Ejemplo: app_db)'
+      ansible.builtin.postgresql_db:
+        login_user: postgres
+        name: app_db
+        owner: app_user
+        encoding: UTF-8
+        state: present
+      become_user: postgres
