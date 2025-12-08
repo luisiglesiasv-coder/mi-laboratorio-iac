@@ -13,7 +13,7 @@ POSTGRES_HOST = '10.0.0.31'
 POSTGRES_DB = 'postgres'
 POSTGRES_USER = 'postgres'
 # NOTA: La contraseña DEBE ser la que usaste en Ansible y Vault
-POSTGRES_PASSWORD = 'TU_CONTRASEÑA_DE_PRUEBA' 
+POSTGRES_PASSWORD = '' 
 REDIS_HOST = '10.0.0.31'
 
 
