@@ -11,7 +11,15 @@ jobs:
       - name: Checkout del Código
         uses: actions/checkout@v4
 
-      # ----------------------------------------------------
+      # 🔑 NUEVO PASO CRÍTICO: Instalar el cliente Vault CLI
+      - name: Instalar Vault CLI
+        uses: hashicorp/setup-terraform@v3 # Esta acción sirve para Vault también
+        with:
+          cli_config_path: ${{ github.repository_path }}
+          cli_version: 1.16.0 # Versión reciente y estable
+          # Nota: Esta acción automáticamente añade el binario 'vault' al PATH
+      
+          # ----------------------------------------------------
       # 🔑 PASOS CRÍTICOS: Obtener Credenciales de Vault
       # ----------------------------------------------------
       - name: Configurar Variables de Vault y Obtener Credenciales Dinámicas
