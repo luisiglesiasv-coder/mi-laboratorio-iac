@@ -11,8 +11,8 @@ import pytest
 # --- CONFIGURACIÓN (Ajustar si es necesario) ---
 # Ahora dependemos de variables de entorno (DB_HOST, DB_USER, DB_PASS, DB_NAME)
 # Las siguientes constantes SÓLO se usan como valor por defecto si la variable de entorno no existe.
-WEB_ADDRESS = 'http://10.0.0.31'
-REDIS_HOST = '10.0.0.31'
+WEB_ADDRESS = 'http://10.0.0.23'
+REDIS_HOST = '10.0.0.23'
 
 
 # --- FUNCIÓN AUXILIAR DE CONEXIÓN A DB (USANDO VAULT SECRETS) ---
