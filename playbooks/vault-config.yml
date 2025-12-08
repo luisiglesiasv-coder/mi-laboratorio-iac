@@ -10,31 +10,59 @@
 
   vars:
     vault_addr: "http://10.0.0.31:8200"
-    vault_token: "hvs.TlA2xCHPWSebAjrI9NTnxI3G" # Token root (solo para IaC inicial)
-    pg_vault_password: "PostgreSQL*123" # Contraseña del superusuario 'postgres'
+    vault_token: "hvs.TlA2xCHPWSebAjrI9NTnxI3G" # Token root (usar Ansible Vault para esto)
+    pg_vault_password: "PostgreSQL*123" # Contraseña del superusuario 'postgres' (usar Ansible Vault)
+    
+    # SOLUCIÓN: Definimos la URL como una variable local de Ansible.
+    # Ansible interpreta esto como una cadena que contiene la sintaxis de plantillas de Vault.
+    pg_conn_url_template: "postgresql://{{username}}:{{password}}@10.0.0.31:5432/?sslmode=disable"
     
   tasks:
     
-    - name: 1. Habilitar el motor de secretos dinamicos 'database/' (si no existe)
-      community.hashi_vault.vault_secrets_enable:
+     # --- TAREA 1: Verificar si el motor de secretos 'database' ya existe ---
+    - name: 1.1 Checkear si el motor de secretos 'database' esta habilitado
+      community.hashi_vault.vault_read:
         url: "{{ vault_addr }}"
         token: "{{ vault_token }}"
-        path: database 
-        type: database
+        # Ruta de API para leer configuraciones de mounts específicos
+        path: sys/mounts/database 
+      register: database_mount_status
+      # Ignoramos errores aquí, ya que 'vault_read' fallará si la ruta no existe
+      ignore_errors: true 
+      # delegate_to: localhost (Esta línea no es necesaria y estaba comentada)
+
+    # --- TAREA 2: Habilitar SOLO si la verificación anterior FALLÓ (no existe) ---
+    - name: 1.2 Habilitar el motor de secretos dinamicos (solo si no existe)
+      community.hashi_vault.vault_write:
+        url: "{{ vault_addr }}"
+        token: "{{ vault_token }}"
+        path: sys/mounts/database 
+        data:
+          type: database
+          description: "Database secrets engine for PostgreSQL"
+      # Esta es la lógica clave: 'when' solo se ejecuta si la tarea anterior falló ('failed')
+      when: database_mount_status.failed
+   
       
     - name: 2. Configurar la conexion administrativa a PostgreSQL
       community.hashi_vault.vault_write:
         url: "{{ vault_addr }}"
         token: "{{ vault_token }}"
-        path: database/config/postgresql # Ruta del comando CLI
+        path: database/config/postgresql
         data:
           plugin_name: postgresql-database-plugin
           allowed_roles: runner_role
-          # Conexión usando la IP del db-node
+          # Definimos 'connection_url' de nuevo en una sola línea
           connection_url: "postgresql://{{username}}:{{password}}@10.0.0.31:5432/?sslmode=disable"
+                  
           username: postgres
           password: "{{ pg_vault_password }}"
-        
+      # AÑADIMOS ESTA SECCIÓN: Definimos variables temporales solo para esta tarea
+      vars:
+        username: "{{ '{{username}}' }}"
+        password: "{{ '{{password}}' }}"
+
+
     - name: 3. Crear el Rol 'runner_role' para credenciales temporales
       community.hashi_vault.vault_write:
         url: "{{ vault_addr }}"
@@ -48,3 +76,5 @@
             GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO "{{name}}";
           default_ttl: "1h"
           max_ttl: "24h"
+
+

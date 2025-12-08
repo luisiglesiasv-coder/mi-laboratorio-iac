@@ -30,7 +30,7 @@ jobs:
           mkdir -p "$HOME/bin"
           mv vault "$HOME/bin/"
           
-          # 4. Exportar el nuevo binario a la variable de entorno $PATH para el resto del job
+          # 4. Exportar elansible-galaxy collection list nuevo binario a la variable de entorno $PATH para el resto del job
           echo "$HOME/bin" >> $GITHUB_PATH
           
           echo "✅ Cliente Vault (v$VAULT_VERSION) instalado localmente y añadido al PATH."
