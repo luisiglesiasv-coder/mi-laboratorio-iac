@@ -24,7 +24,7 @@ jobs:
 
       - name: 5. Configurar Variables de Entorno de Vault
         # Utiliza secretos de GitHub Actions para inyectar las credenciales
-        # para que hvac se conecte a Vault.
+        # para que hvac se conecte a Vault. 
         run: |
           echo "VAULT_ADDR=${{ secrets.VAULT_ADDRESS }}" >> $GITHUB_ENV
           echo "VAULT_TOKEN=${{ secrets.VAULT_TOKEN_SECRET }}" >> $GITHUB_ENV
