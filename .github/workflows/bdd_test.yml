@@ -4,63 +4,97 @@ on: [push]
 
 jobs:
   bdd_tests:
-    runs-on: self-hosted # O la etiqueta de tu Runner (ej. web-node)
+    # Asegúrate de que tu runner self-hosted tiene la etiqueta correcta
+    runs-on: self-hosted 
     
     steps:
     
       - name: Checkout del Código
         uses: actions/checkout@v4
 
-      # 🔑 PASO CRÍTICO: Descargar, Descomprimir y Añadir al PATH Local
+      # 1. Instalar Vault CLI (Igual que antes)
       - name: Instalar Vault CLI (Solución sin Sudo)
         shell: bash
         run: |
-          # 1. Definir la versión y la arquitectura
           VAULT_VERSION="1.16.0"
-          
-          # Suponiendo que el runner es Linux. Si es macOS, cambia a darwin_amd64.
+          # IMPORTANTE: Asegúrate de que la arquitectura (linux_amd64) es correcta para tu runner
           URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"
           
-          # 2. Descargar en el directorio de trabajo actual
           curl -LO "$URL"
           unzip vault_${VAULT_VERSION}_linux_amd64.zip
           
-          # 3. Mover el ejecutable a una carpeta en el entorno local (p.ej., $HOME/bin)
-          # Esto garantiza que el runner tiene permisos
           mkdir -p "$HOME/bin"
           mv vault "$HOME/bin/"
           
-          # 4. Exportar elansible-galaxy collection list nuevo binario a la variable de entorno $PATH para el resto del job
           echo "$HOME/bin" >> $GITHUB_PATH
-          
-          echo "✅ Cliente Vault (v$VAULT_VERSION) instalado localmente y añadido al PATH."
+          echo "✅ Cliente Vault (v$VAULT_VERSION) instalado localmente."
       
-          # ----------------------------------------------------
-      # 🔑 PASOS CRÍTICOS: Obtener Credenciales de Vault
       # ----------------------------------------------------
-      - name: Configurar Variables de Vault y Obtener Credenciales Dinámicas
-        id: vault_creds
+      # 🔑 NUEVO: Autenticación con AppRole
+      # ----------------------------------------------------
+      - name: Autenticar con Vault (AppRole Login)
+        id: vault_login
         shell: bash
         env:
           VAULT_ADDR: http://10.0.0.31:8200
-          # Usaremos el token root fijo para IaC. En producción, usa VAULT_TOKEN de AppRole.
-          VAULT_TOKEN: ${{ secrets.VAULT_ROOT_TOKEN }}
+          # Inyectamos los secretos que acabas de crear en GitHub
+          VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+          VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
         run: |
-          echo "VAULT_ADDR=$VAULT_ADDR"
+          # Usamos el comando 'vault write' para hacer login en el endpoint de AppRole
+          # y guardamos la respuesta JSON
+          LOGIN_RESPONSE=$(vault write -format=json auth/approle/login \
+            role_id="$VAULT_ROLE_ID" \
+            secret_id="$VAULT_SECRET_ID")
 
-          # 1. Leer el secreto dinámico de la DB
+          # Extraemos el token temporal del cliente desde la respuesta JSON
+          VAULT_CLIENT_TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.auth.client_token')
+          
+          # Validamos que hemos obtenido un token
+          if [ -z "$VAULT_CLIENT_TOKEN" ] || [ "$VAULT_CLIENT_TOKEN" == "null" ]; then
+            echo "❌ Error: No se pudo obtener el token de cliente mediante AppRole."
+            exit 1
+          fi
+
+          # Exportamos el token como una variable de entorno SECRETA para los siguientes pasos.
+          # Esto es fundamental: '::add-mask::' evita que el token se imprima en los logs.
+          echo "::add-mask::$VAULT_CLIENT_TOKEN"
+          echo "VAULT_TOKEN=$VAULT_CLIENT_TOKEN" >> $GITHUB_ENV
+          
+          echo "✅ Autenticación AppRole exitosa. Token temporal obtenido."
+
+      # ----------------------------------------------------
+      # 🔑 NUEVO: Obtener Credenciales Dinámicas (Usando el Token Temporal)
+      # ----------------------------------------------------
+      - name: Obtener Credenciales Dinámicas de Base de Datos
+        id: db_creds
+        shell: bash
+        env:
+          VAULT_ADDR: http://10.0.0.31:8200
+          # No necesitamos definir VAULT_TOKEN aquí explícitamente,
+          # ya que lo exportamos al $GITHUB_ENV en el paso anterior.
+        run: |
+          # Leemos el secreto dinámico. Vault CLI usará automáticamente la variable
+          # de entorno VAULT_TOKEN que configuramos en el paso anterior.
           SECRET_DATA=$(vault read -format=json database/creds/runner_role)
           
-          # 2. Parsear el JSON y exportar las variables
+          # Parseamos el JSON para obtener usuario y contraseña
           DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
           DB_PASS=$(echo "$SECRET_DATA" | jq -r '.data.password')
           
-          # 3. Exportar variables a GitHub Actions Runner
-          # Esto hace que DB_USER y DB_PASS estén disponibles para pasos posteriores
+          # Validamos que tenemos las credenciales
+          if [ -z "$DB_USER" ] || [ "$DB_USER" == "null" ]; then
+            echo "❌ Error: No se pudieron obtener las credenciales de la base de datos."
+            exit 1
+          fi
+
+          # Exportamos las credenciales para que las usen las pruebas de Python.
+          # Usamos '::add-mask::' para la contraseña por seguridad.
           echo "DB_USER=$DB_USER" >> $GITHUB_ENV
+          echo "::add-mask::$DB_PASS"
           echo "DB_PASS=$DB_PASS" >> $GITHUB_ENV
           
-          echo "✅ Credenciales dinámicas obtenidas."
+          echo "✅ Credenciales dinámicas (Usuario: $DB_USER) obtenidas y exportadas."
 
       - name: Instalar Dependencias de Python
         run: |
@@ -73,11 +107,9 @@ jobs:
       # ----------------------------------------------------
       - name: Ejecutar Pruebas BDD Behave
         shell: bash
-        # Las variables DB_USER y DB_PASS ahora están disponibles automáticamente
         run: |
           source venv/bin/activate
-          # El código Python de la prueba debe leer las variables de entorno:
-          # os.environ.get('DB_USER'), os.environ.get('DB_PASS'), os.environ.get('DB_HOST')
+          # Definimos el host de la base de datos
           export DB_HOST=10.0.0.31
+          # Las variables DB_USER y DB_PASS ya están en el entorno gracias al paso anterior
           behave tests/features/
-

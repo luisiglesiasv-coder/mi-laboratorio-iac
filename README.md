@@ -127,3 +127,4 @@ N.º,Fase y Sistema,Pasos Detallados y Ficheros Involucrados
 
 Nginx/Redis	Servicios instalados y ejecutándose con configuraciones por defecto.
 
+
