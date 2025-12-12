@@ -10,11 +10,11 @@
   vars:
     vault_addr: "http://10.0.0.31:8200"
     # Token Root (Para autenticarse y configurar)
-    vault_token: "hvs.TlA2xCHPWSebAjrI9NTnxI3G"
+    vault_token: "hvs.LOQuiwdRsHC86aQGg34bA5Xv"
     
     # NUEVO: Tu clave de desbloqueo (Unseal Key) encontrada
     # NOTA: En producción, esto debería estar encriptado con Ansible Vault.
-    vault_unseal_key: "KtUy9UcT4RS+H+Lal0r6YSrk83MmBUqlx0HLQIQe0eE="
+    vault_unseal_key: "rBLtbCvDcjI8X9MjRQwl1+fuIPh+ZBoCl8Ot0xOt7Pk="
     
     # Credenciales de la BBDD Real
     pg_vault_password: "PostgreSQL*123" 

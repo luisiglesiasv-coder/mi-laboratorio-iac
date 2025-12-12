@@ -7,28 +7,106 @@ on:
     branches: [ main ] 
 
 jobs:
-  test_infrastructure:
+  bdd_tests: # Renombrado para reflejar el tipo de prueba BDD
     runs-on: self-hosted 
     
+    # Definimos las variables que Vault CLI necesita (VAULT_ADDR y los IDs del AppRole)
+    env:
+      VAULT_ADDR: http://10.0.0.31:8200
+      VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
+      VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+      
     steps:
-    - name: Checkout del Codigo
+    - name: Checkout del Código
       uses: actions/checkout@v4 
       
-    - name: Instalar paquetes esenciales de Python
+    # --- TAREA 1: CONFIGURAR ENTORNO DE PRUEBAS ---
+    
+    - name: Instalar Vault CLI (Solución sin Sudo)
+      # Descarga y mueve el binario de Vault a un path local ($HOME/bin)
       run: |
-        # Garantizamos que venv y pip estén disponibles en el sistema
-        sudo apt-get update
-        sudo apt-get install -y python3-pip python3-venv 
+        VAULT_VERSION="1.16.0"
+        # IMPORTANTE: Asegúrate de que la arquitectura (linux_amd64) es correcta para tu runner
+        URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"
         
-    - name: Configurar y activar el entorno virtual
-      run: |
-        # 1. Crear el entorno virtual llamado venv-ci
-        python3 -m venv venv-ci
+        curl -LO "$URL"
+        unzip vault_${VAULT_VERSION}_linux_amd64.zip
         
-        # 2. Actualizar Pip e instalar dependencias dentro del VENV
-        ./venv-ci/bin/pip install --upgrade pip
-        ./venv-ci/bin/pip install -r requirements.txt 
+        mkdir -p "$HOME/bin"
+        mv vault "$HOME/bin/"
+        
+        # Añade $HOME/bin al PATH para que 'vault' esté disponible en pasos siguientes
+        echo "$HOME/bin" >> $GITHUB_PATH
+        echo "✅ Cliente Vault (v$VAULT_VERSION) instalado localmente."
 
-    - name: Ejecutar Pruebas de Infraestructura
-      # Usar el ejecutable de pytest DENTRO del entorno virtual
-      run: ./venv-ci/bin/pytest -v tests/features
+    # --- TAREA 2: AUTENTICACIÓN Y OBTENCIÓN DE SECRETOS ---
+
+    - name: Autenticar con Vault (AppRole Login)
+      # Este paso usa el AppRole para obtener un token de cliente temporal
+      id: vault_login
+      run: |
+        # Usamos el comando 'vault write' para hacer login en el endpoint de AppRole
+        # y guardamos la respuesta JSON
+        LOGIN_RESPONSE=$(vault write -format=json auth/approle/login \
+          role_id="$VAULT_ROLE_ID" \
+          secret_id="$VAULT_SECRET_ID")
+        
+        # Extraemos el token temporal del cliente desde la respuesta JSON
+        VAULT_CLIENT_TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.auth.client_token')
+        
+        # Validamos que hemos obtenido un token
+        if [ -z "$VAULT_CLIENT_TOKEN" ] || [ "$VAULT_CLIENT_TOKEN" == "null" ]; then
+          echo "❌ Error: No se pudo obtener el token de cliente mediante AppRole."
+          exit 1
+        fi
+        
+        # Exportamos el token como una variable de entorno SECRETA para los siguientes pasos.
+        # Esto es fundamental: '::add-mask::' evita que el token se imprima en los logs.
+        echo "::add-mask::$VAULT_CLIENT_TOKEN"
+        echo "VAULT_TOKEN=$VAULT_CLIENT_TOKEN" >> $GITHUB_ENV
+        
+        echo "✅ Autenticación AppRole exitosa. Token temporal obtenido."
+
+    - name: Obtener Credenciales Dinámicas de Base de Datos
+      # Este paso usa el token temporal para leer credenciales de DB dinámicas
+      id: db_creds
+      run: |
+        # Leemos el secreto dinámico. Vault CLI usará automáticamente la variable
+        # de entorno VAULT_TOKEN que configuramos en el paso anterior.
+        SECRET_DATA=$(vault read -format=json database/creds/runner_role)
+        
+        # Parseamos el JSON para obtener usuario y contraseña
+        DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
+        DB_PASS=$(echo "$SECRET_DATA" | jq -r '.data.password')
+        
+        # Validamos que tenemos las credenciales
+        if [ -z "$DB_USER" ] || [ "$DB_USER" == "null" ]; then
+          echo "❌ Error: No se pudieron obtener las credenciales de la base de datos."
+          exit 1
+        fi
+        
+        # Exportamos las credenciales para que las usen las pruebas de Python.
+        echo "DB_USER=$DB_USER" >> $GITHUB_ENV
+        echo "::add-mask::$DB_PASS"
+        echo "DB_PASS=$DB_PASS" >> $GITHUB_ENV
+        
+        echo "✅ Credenciales dinámicas (Usuario: $DB_USER) obtenidas y exportadas."
+
+    # --- TAREA 3: PREPARAR Y EJECUTAR PRUEBAS ---
+    
+    - name: Instalar Dependencias de Python
+      # Simplificamos la instalación del VENV y dependencias
+      run: |
+        python3 -m venv venv
+        source venv/bin/activate
+        pip install -r requirements.txt
+        
+    - name: Ejecutar Pruebas BDD Behave
+      # Usar el ejecutable de Behave DENTRO del entorno virtual
+      run: ./venv/bin/behave -i tests/features
+      env:
+        # Exportamos las variables de conexión que las pruebas usarán
+        DB_HOST: 10.0.0.31
+        DB_NAME: postgres
+        DB_USER: ${{ env.DB_USER }}
+        DB_PASS: ${{ env.DB_PASS }}
