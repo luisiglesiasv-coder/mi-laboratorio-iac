@@ -100,7 +100,7 @@
     path: auth/approle/role/ci-runner
     data:
       policies: ["runner-policy"]
-      secret_id_ttl: "5m"
+      secret_id_ttl: "0"
       token_ttl: "1h"
       # Añadir esta línea para evitar la caducidad por uso único (0 = ilimitado)
       secret_id_num_uses: 0
