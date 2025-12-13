@@ -19,6 +19,13 @@ jobs:
     steps:
     - name: Checkout del Código
       uses: actions/checkout@v4 
+
+    # --- DEBUGGING STEP (Para confirmar que el runner ve el archivo) ---
+    - name: 🐛 DEBUG - Mostrar contenido del workflow
+      run: |
+        echo "Contenido de .github/workflows/ci_tests.yml en el runner:"
+        cat .github/workflows/ci_tests.yml
+    # ---------------------------------------------
       
     # --- TAREA 1: CONFIGURAR ENTORNO DE PRUEBAS ---
     
@@ -66,6 +73,7 @@ jobs:
     - name: 2.2 Obtener Credenciales Dinámicas de PostgreSQL
       id: pg_creds
       run: |
+        # Usamos -token="$VAULT_TOKEN" para asegurar que el CLI use el token
         SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/runner-role)
         
         DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
@@ -101,50 +109,4 @@ jobs:
         fi
         
         # Exportamos las credenciales para su uso en las pruebas
-        echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
-        echo "::add-mask::$REDIS_PASS"
-        echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
-        
-        # Exportamos el Lease ID para revocarlo en el paso final
-        echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
-        echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
-
-    # --- TAREA 3: PREPARAR Y EJECUTAR PRUEBAS ---
-    
-    - name: 3.1 Instalar Dependencias de Python
-      run: |
-        python3 -m venv venv
-        source venv/bin/activate
-        pip install -r requirements.txt
-        
-    - name: 3.2 Ejecutar Pruebas BDD Behave
-      run: ./venv/bin/behave -i tests/features
-      env:
-        # Variables de PostgreSQL
-        DB_HOST: 10.0.0.31
-        DB_NAME: postgres
-        DB_USER: ${{ env.DB_USER }}
-        DB_PASS: ${{ env.DB_PASS }}
-        # Variables de Redis
-        REDIS_HOST: 10.0.0.31
-        REDIS_PORT: 6379
-        REDIS_USER: ${{ env.REDIS_USER }}
-        REDIS_PASS: ${{ env.REDIS_PASS }}
-        
-    # --- TAREA 4: REVOCACIÓN Y LIMPIEZA (CRUCIAL) ---
-
-    - name: 4.1 Revocar Leases de Credenciales y Token de Cliente
-      # Se ejecuta SIEMPRE, incluso si las pruebas fallan (if: always())
-      if: always()
-      run: |
-        # 4.1 Revocar Lease de PostgreSQL
-        vault lease revoke "${{ steps.pg_creds.outputs.pg_lease_id }}" 2>/dev/null || true
-        echo "PostgreSQL Lease revocado."
-
-        # 4.2 Revocar Lease de Redis
-        vault lease revoke "${{ steps.redis_creds.outputs.redis_lease_id }}" 2>/dev/null || true
-        echo "Redis Lease revocado."
-
-        # 4.3 Revocar el Token de Sesión del Runner
-        vault token revoke -self 2>/dev/null || true
-        echo "Token de AppRole revocado."
+        echo "REDIS_USER=$REDIS_USER" >> $
