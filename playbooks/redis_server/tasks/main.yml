@@ -1,0 +1,54 @@
+---
+# Tareas del Role redis_server
+
+- name: 1. Instalar el paquete Redis Server
+  ansible.builtin.apt:
+    name: redis-server
+    state: present
+    update_cache: yes
+    
+- name: 2. Modificar la configuración de Redis para escuchar en todas las interfaces (0.0.0.0)
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    # EXPLICACIÓN DE LA NUEVA REGEX:
+    # ^       -> Principio de línea
+    # \s* -> Cero o más espacios (por si hay identación)
+    # bind    -> La palabra literal
+    # \s+     -> Al menos un espacio
+    # 127...  -> Buscamos explícitamente la IP local restrictiva
+    # .* -> El resto de la línea (para atrapar el "-::1")
+    regexp: '^\s*bind\s+127\.0\.0\.1.*'
+    line: 'bind 0.0.0.0'
+    state: present
+  notify: Reiniciar Redis
+
+- name: 3. Desactivar protected-mode para permitir conexiones externas
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^protected-mode yes'
+    line: 'protected-mode no'
+    backup: yes
+  notify: Reiniciar Redis
+
+- name: 4. Configurar la contraseña de acceso (requirepass)
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    # Usa la variable redis_master_password cargada desde group_vars/all/redis_secrets.yml
+    line: "requirepass {{ redis_master_password }}" 
+    regexp: '^# requirepass' 
+    insertafter: EOF
+    backup: yes
+  notify: Reiniciar Redis
+  
+- name: 5. Asegurar que el servicio Redis esté iniciado y habilitado
+  ansible.builtin.service:
+    name: redis-server
+    state: started
+    enabled: yes
+    
+- name: 6. GUARDAR la contraseña maestra de Redis para su uso posterior en Vault (en Control Node)
+  ansible.builtin.copy:
+    content: "{{ redis_master_password }}"
+    dest: "{{ playbook_dir }}/../files/redis_master_password.txt"
+  delegate_to: localhost
+  run_once: true

@@ -7,10 +7,10 @@ on:
     branches: [ main ] 
 
 jobs:
-  bdd_tests: # Renombrado para reflejar el tipo de prueba BDD
+  bdd_tests: 
     runs-on: self-hosted 
     
-    # Definimos las variables que Vault CLI necesita (VAULT_ADDR y los IDs del AppRole)
+    # Definimos las variables de entorno de Vault y los secretos de AppRole
     env:
       VAULT_ADDR: http://10.0.0.31:8200
       VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
@@ -22,11 +22,10 @@ jobs:
       
     # --- TAREA 1: CONFIGURAR ENTORNO DE PRUEBAS ---
     
-    - name: Instalar Vault CLI (Solución sin Sudo)
-      # Descarga y mueve el binario de Vault a un path local ($HOME/bin)
+    - name: Instalar Vault CLI y JQ (Procesador JSON)
       run: |
+        # 1. Instalar Vault CLI
         VAULT_VERSION="1.16.0"
-        # IMPORTANTE: Asegúrate de que la arquitectura (linux_amd64) es correcta para tu runner
         URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"
         
         curl -LO "$URL"
@@ -35,78 +34,118 @@ jobs:
         mkdir -p "$HOME/bin"
         mv vault "$HOME/bin/"
         
-        # Añade $HOME/bin al PATH para que 'vault' esté disponible en pasos siguientes
+        # 2. Instalar JQ (Necesario para parsear la respuesta JSON de Vault)
+        curl -Lo "$HOME/bin/jq" https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+        chmod +x "$HOME/bin/jq"
+
+        # Añadir al PATH para usar 'vault' y 'jq' en pasos posteriores
         echo "$HOME/bin" >> $GITHUB_PATH
-        echo "✅ Cliente Vault (v$VAULT_VERSION) instalado localmente."
+        echo "✅ Cliente Vault y JQ instalados."
 
     # --- TAREA 2: AUTENTICACIÓN Y OBTENCIÓN DE SECRETOS ---
 
-    - name: Autenticar con Vault (AppRole Login)
-      # Este paso usa el AppRole para obtener un token de cliente temporal
+    - name: 2.1 Autenticar con Vault (AppRole Login)
       id: vault_login
       run: |
-        # Usamos el comando 'vault write' para hacer login en el endpoint de AppRole
-        # y guardamos la respuesta JSON
         LOGIN_RESPONSE=$(vault write -format=json auth/approle/login \
           role_id="$VAULT_ROLE_ID" \
           secret_id="$VAULT_SECRET_ID")
         
-        # Extraemos el token temporal del cliente desde la respuesta JSON
         VAULT_CLIENT_TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.auth.client_token')
         
-        # Validamos que hemos obtenido un token
         if [ -z "$VAULT_CLIENT_TOKEN" ] || [ "$VAULT_CLIENT_TOKEN" == "null" ]; then
           echo "❌ Error: No se pudo obtener el token de cliente mediante AppRole."
           exit 1
         fi
         
-        # Exportamos el token como una variable de entorno SECRETA para los siguientes pasos.
-        # Esto es fundamental: '::add-mask::' evita que el token se imprima en los logs.
+        # Exportamos el token para su uso en los comandos 'vault read'
         echo "::add-mask::$VAULT_CLIENT_TOKEN"
         echo "VAULT_TOKEN=$VAULT_CLIENT_TOKEN" >> $GITHUB_ENV
-        
-        echo "✅ Autenticación AppRole exitosa. Token temporal obtenido."
+        echo "✅ Autenticación AppRole exitosa."
 
-    - name: Obtener Credenciales Dinámicas de Base de Datos
-      # Este paso usa el token temporal para leer credenciales de DB dinámicas
-      id: db_creds
+    - name: 2.2 Obtener Credenciales Dinámicas de PostgreSQL
+      id: pg_creds
       run: |
-        # Leemos el secreto dinámico. Vault CLI usará automáticamente la variable
-        # de entorno VAULT_TOKEN que configuramos en el paso anterior.
-        SECRET_DATA=$(vault read -format=json database/creds/runner_role)
+        SECRET_DATA=$(vault read -format=json database/creds/runner-role)
         
-        # Parseamos el JSON para obtener usuario y contraseña
         DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
         DB_PASS=$(echo "$SECRET_DATA" | jq -r '.data.password')
+        PG_LEASE_ID=$(echo "$SECRET_DATA" | jq -r '.lease_id') 
         
-        # Validamos que tenemos las credenciales
         if [ -z "$DB_USER" ] || [ "$DB_USER" == "null" ]; then
-          echo "❌ Error: No se pudieron obtener las credenciales de la base de datos."
+          echo "❌ Error: No se pudieron obtener las credenciales de PostgreSQL."
           exit 1
         fi
         
-        # Exportamos las credenciales para que las usen las pruebas de Python.
         echo "DB_USER=$DB_USER" >> $GITHUB_ENV
         echo "::add-mask::$DB_PASS"
         echo "DB_PASS=$DB_PASS" >> $GITHUB_ENV
         
-        echo "✅ Credenciales dinámicas (Usuario: $DB_USER) obtenidas y exportadas."
+        # Exportamos el Lease ID para revocarlo en el paso final
+        echo "pg_lease_id=$PG_LEASE_ID" >> $GITHUB_OUTPUT 
+        echo "✅ Credenciales PostgreSQL obtenidas (Lease ID: $PG_LEASE_ID)."
+
+    - name: 2.3 Obtener Credenciales Dinámicas de Redis
+      id: redis_creds
+      run: |
+        # Usamos el rol 'redis-runner-role' configurado en Vault
+        REDIS_SECRET_DATA=$(vault read -format=json database/creds/redis-runner-role)
+        
+        REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
+        REDIS_PASS=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.password')
+        REDIS_LEASE_ID=$(echo "$REDIS_SECRET_DATA" | jq -r '.lease_id')
+        
+        if [ -z "$REDIS_USER" ] || [ "$REDIS_USER" == "null" ]; then
+          echo "❌ Error: No se pudieron obtener las credenciales de Redis."
+          exit 1
+        fi
+        
+        # Exportamos las credenciales para su uso en las pruebas
+        echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
+        echo "::add-mask::$REDIS_PASS"
+        echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
+        
+        # Exportamos el Lease ID para revocarlo en el paso final
+        echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
+        echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
 
     # --- TAREA 3: PREPARAR Y EJECUTAR PRUEBAS ---
     
-    - name: Instalar Dependencias de Python
-      # Simplificamos la instalación del VENV y dependencias
+    - name: 3.1 Instalar Dependencias de Python
       run: |
         python3 -m venv venv
         source venv/bin/activate
         pip install -r requirements.txt
         
-    - name: Ejecutar Pruebas BDD Behave
-      # Usar el ejecutable de Behave DENTRO del entorno virtual
+    - name: 3.2 Ejecutar Pruebas BDD Behave
       run: ./venv/bin/behave -i tests/features
       env:
-        # Exportamos las variables de conexión que las pruebas usarán
+        # Variables de PostgreSQL
         DB_HOST: 10.0.0.31
         DB_NAME: postgres
         DB_USER: ${{ env.DB_USER }}
         DB_PASS: ${{ env.DB_PASS }}
+        # Variables de Redis
+        REDIS_HOST: 10.0.0.31
+        REDIS_PORT: 6379
+        REDIS_USER: ${{ env.REDIS_USER }}
+        REDIS_PASS: ${{ env.REDIS_PASS }}
+        
+    # --- TAREA 4: REVOCACIÓN Y LIMPIEZA (CRUCIAL) ---
+
+    - name: 4.1 Revocar Leases de Credenciales y Token de Cliente
+      # Se ejecuta SIEMPRE, incluso si las pruebas fallan (if: always())
+      if: always()
+      run: |
+        # 4.1 Revocar Lease de PostgreSQL
+        vault lease revoke "${{ steps.pg_creds.outputs.pg_lease_id }}" 2>/dev/null || true
+        echo "PostgreSQL Lease revocado."
+
+        # 4.2 Revocar Lease de Redis
+        vault lease revoke "${{ steps.redis_creds.outputs.redis_lease_id }}" 2>/dev/null || true
+        echo "Redis Lease revocado."
+
+        # 4.3 Revocar el Token de Sesión del Runner
+        vault token revoke -self 2>/dev/null || true
+        echo "Token de AppRole revocado."
+        

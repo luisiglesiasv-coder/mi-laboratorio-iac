@@ -1,0 +1,19 @@
+# playbooks/cleanup_redis.yml
+
+---
+- name: TAREA DE LIMPIEZA | Desinstalar Redis Server de los Nodos del Runner
+  hosts: webservers # Asumiendo que 'webservers' es el grupo donde Redis se instaló por error/anteriormente
+  become: true
+  ignore_errors: yes # Si Redis no está instalado, simplemente ignoramos el error
+
+  tasks:
+    - name: 1. Detener el servicio Redis
+      ansible.builtin.service:
+        name: redis-server
+        state: stopped
+
+    - name: 2. Desinstalar el paquete Redis Server
+      ansible.builtin.apt:
+        name: redis-server
+        state: absent
+        autoremove: yes # Elimina paquetes dependientes que ya no se necesiten

@@ -16,8 +16,12 @@
     # NOTA: En producción, esto debería estar encriptado con Ansible Vault.
     vault_unseal_key: "rBLtbCvDcjI8X9MjRQwl1+fuIPh+ZBoCl8Ot0xOt7Pk="
     
-    # Credenciales de la BBDD Real
-    pg_vault_password: "PostgreSQL*123" 
+    # Credenciales de la BBDD Real (Usuarios Administrativos/Maestros)
+    pg_vault_password: "PostgreSQL*123"
+    redis_vault_password: "Redis*Password123" 
+
+    # Host del servicio de BBDD (Mismo que el host de Vault)
+    pg_redis_host: "10.0.0.31"
     
   roles:
      - vault_server

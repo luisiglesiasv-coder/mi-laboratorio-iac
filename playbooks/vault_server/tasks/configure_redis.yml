@@ -1,0 +1,42 @@
+---
+- name: "Redis | Leer la contraseña maestra desde el archivo local"
+  ansible.builtin.slurp:
+    src: "{{ playbook_dir }}/../files/redis_master_password.txt"
+  register: redis_pass_file
+
+- name: "Redis | Decodificar la contraseña maestra"
+  ansible.builtin.set_fact:
+    # Decodificamos y limpiamos. NO usamos urlencode aquí porque pasamos el campo 'password' puro.
+    redis_master_password: "{{ redis_pass_file['content'] | b64decode | regex_replace('\\n', '') | trim }}"
+
+- name: "Redis | Configurar la conexión del Motor de Base de Datos para Redis"
+  community.hashi_vault.vault_write:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_token }}"
+    path: database/config/redis-primary
+    data:
+      plugin_name: redis-database-plugin
+      allowed_roles: ["redis-runner-role", "redis-readonly-role"]
+      
+      # CONFIGURACIÓN CORRECTA (Validada con prueba manual "C"):
+      # Pasamos los parámetros por separado. El plugin de Redis prefiere esto a una URL.
+      host: "10.0.0.31"
+      port: "6379"
+      username: "default"
+      password: "{{ redis_master_password }}"
+
+- name: "Redis | Crear Rol Dinámico 'redis-runner-role'"
+  community.hashi_vault.vault_write:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_token }}"
+    path: database/roles/redis-runner-role
+    data:
+      db_name: redis-primary
+      default_ttl: "1h"
+      max_ttl: "24h"
+      
+      # SOLUCIÓN AL ERROR DE VARIABLES:
+      # Usamos !unsafe para que Ansible ignore las llaves {{...}} y envíe el texto tal cual a Vault.
+      # Vault es quien debe sustituir {{name}} y {{password}} al crear el usuario, no Ansible.
+      creation_statements: !unsafe '["ACL SETUSER {{name}} on >{{password}} +@all ~*"]'
+      revocation_statements: !unsafe '["ACL DELUSER {{name}}"]'
