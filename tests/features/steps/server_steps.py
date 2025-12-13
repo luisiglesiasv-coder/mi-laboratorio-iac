@@ -127,3 +127,5 @@ def step_then_redis_ping_successful(context: Context):
         pytest.fail(f"Redis PING falló contra {context.redis_host}. Error: {context.redis_error}")
     
     # Si context.redis_ping_result es True, la prueba pasa automáticamente
+
+    
