@@ -67,7 +67,7 @@ jobs:
     - name: 2.2 Obtener Credenciales Dinámicas de PostgreSQL
       id: pg_creds
       run: |
-        SECRET_DATA=$(vault read  format=json database/creds/runner-role)
+        SECRET_DATA=$(vault read  -format=json database/creds/runner-role)
         
         DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
         DB_PASS=$(echo "$SECRET_DATA" | jq -r '.data.password')
