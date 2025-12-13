@@ -16,16 +16,18 @@ jobs:
       VAULT_ADDR: http://10.0.0.31:8200
       VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
       VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
+      # Variable necesaria para el paso 2.3
+      REDIS_ROLE_NAME: redis-runner-role
       
     steps:
     - name: Checkout del Código
       uses: actions/checkout@v4 
-      
+
     # --- TAREA 1: CONFIGURAR ENTORNO DE PRUEBAS ---
     
     - name: 1.1 Instalar Vault CLI y JQ (Procesador JSON)
       run: |
-        # 1. Instalar Vault CLI
+        # Instalación de Vault CLI
         VAULT_VERSION="1.16.0"
         URL="https://releases.hashicorp.com/vault/${VAULT_VERSION}/vault_${VAULT_VERSION}_linux_amd64.zip"
         
@@ -35,11 +37,10 @@ jobs:
         mkdir -p "$HOME/bin"
         mv vault "$HOME/bin/"
         
-        # 2. Instalar JQ (Necesario para parsear la respuesta JSON de Vault)
+        # Instalación de JQ
         curl -Lo "$HOME/bin/jq" https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
         chmod +x "$HOME/bin/jq"
 
-        # Añadir al PATH para usar 'vault' y 'jq' en pasos posteriores
         echo "$HOME/bin" >> $GITHUB_PATH
         echo "✅ Cliente Vault y JQ instalados."
 
@@ -59,16 +60,13 @@ jobs:
           exit 1
         fi
         
-        # Exportamos el token para su uso en los comandos 'vault read'
         echo "::add-mask::$VAULT_CLIENT_TOKEN"
         echo "VAULT_TOKEN=$VAULT_CLIENT_TOKEN" >> $GITHUB_ENV
         echo "✅ Autenticación AppRole exitosa."
 
-        
     - name: 2.2 Obtener Credenciales Dinámicas de PostgreSQL
       id: pg_creds
       run: |
-        # Usamos -token="$VAULT_TOKEN" para asegurar que el CLI use el token
         SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/runner-role)
         
         DB_USER=$(echo "$SECRET_DATA" | jq -r '.data.username')
@@ -84,17 +82,14 @@ jobs:
         echo "::add-mask::$DB_PASS"
         echo "DB_PASS=$DB_PASS" >> $GITHUB_ENV
         
-        # Exportamos el Lease ID para revocarlo en el paso final
         echo "pg_lease_id=$PG_LEASE_ID" >> $GITHUB_OUTPUT 
         echo "✅ Credenciales PostgreSQL obtenidas (Lease ID: $PG_LEASE_ID)."
-
 
     - name: 2.3 Obtener Credenciales Dinámicas de Redis
       id: redis_creds
       run: |
-        # Usamos el rol 'redis-runner-role' configurado en Vault
-        # Aseguramos que pasamos el token
-        REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/redis-runner-role)
+        # Usamos la variable de entorno REDIS_ROLE_NAME
+        REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
         
         REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
         REDIS_PASS=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.password')
@@ -105,12 +100,10 @@ jobs:
           exit 1
         fi
         
-        # Exportamos las credenciales para su uso en las pruebas
         echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
         echo "::add-mask::$REDIS_PASS"
         echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
         
-        # Exportamos el Lease ID para revocarlo en el paso final
         echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
         echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
 
@@ -125,32 +118,23 @@ jobs:
     - name: 3.2 Ejecutar Pruebas BDD Behave
       run: ./venv/bin/behave -i tests/features
       env:
-        # Variables de PostgreSQL (DB Node)
+        # Variables de Conexión
         DB_HOST: 10.0.0.31
-        DB_NAME: postgres
-        DB_USER: ${{ env.DB_USER }}
-        DB_PASS: ${{ env.DB_PASS }}
-        # Variables de Redis (DB Node)
         REDIS_HOST: 10.0.0.31
-        REDIS_PORT: 6379
-        REDIS_USER: ${{ env.REDIS_USER }}
-        REDIS_PASS: ${{ env.REDIS_PASS }}
-        # Variable de Web (Nginx Node)
         WEB_HOST: 10.0.0.23
-
+        # Variables de Credenciales (Ya exportadas por pasos anteriores)
+        # DB_USER, DB_PASS, REDIS_USER, REDIS_PASS
+        
     # --- TAREA 4: REVOCACIÓN Y LIMPIEZA (CRUCIAL) ---
 
     - name: 4.1 Revocar Leases de Credenciales y Token de Cliente
-      # Se ejecuta SIEMPRE, incluso si las pruebas fallan (if: always())
       if: always()
       run: |
-        # Revocación de Leases (el Lease ID es una salida del paso 2.2/2.3)
         vault lease revoke "${{ steps.pg_creds.outputs.pg_lease_id }}" 2>/dev/null || true
         echo "PostgreSQL Lease revocado."
 
         vault lease revoke "${{ steps.redis_creds.outputs.redis_lease_id }}" 2>/dev/null || true
         echo "Redis Lease revocado."
 
-        # Revocación del Token de Sesión del Runner (token actual)
         vault token revoke -self 2>/dev/null || true
         echo "Token de AppRole revocado."
