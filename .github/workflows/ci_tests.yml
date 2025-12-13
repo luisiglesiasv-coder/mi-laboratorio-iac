@@ -108,7 +108,9 @@ jobs:
         
         echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
         echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
-
+        echo "REDIS_USER=$REDIS_USER"
+        echo "REDIS_PASS=$REDIS_PASS"
+        
 
 
         
@@ -133,7 +135,7 @@ jobs:
         REDIS_USER: ${{ env.REDIS_USER }}
         REDIS_PASS: ${{ env.REDIS_PASS }}
         
-        
+
     # --- TAREA 4: REVOCACIÓN Y LIMPIEZA (CRUCIAL) ---
 
     - name: 4.1 Revocar Leases de Credenciales y Token de Cliente

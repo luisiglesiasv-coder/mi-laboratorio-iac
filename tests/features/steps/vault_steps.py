@@ -1,77 +1,84 @@
 # tests/features/steps/vault_steps.py
 
 import requests
-from behave import given, when, then
-from behave.runner import Context
+import os
 import json
 import pytest
+from behave import given, when, then
+from behave.runner import Context
 
-# Lista de códigos de estado válidos que indica que el servicio Vault está vivo
-# 200: Inicializado, Desellado, Sin errores.
-# 429: Sellado (Sealed).
-# 501: No inicializado.
-# 503: Servicio no disponible (ej. error de almacenamiento).
+# Códigos válidos: 
+# 200 (Active), 429 (Standby/Sealed), 501 (Not Init), 503 (Sealed/Maintenance)
 VALID_STATUS_CODES = [200, 429, 501, 503]
 
 @given('la dirección del servidor de Vault es "{address}"')
 def step_given_vault_address(context: Context, address: str):
-    """Establece la dirección base de Vault."""
-    context.vault_address = address
+    """
+    Establece la dirección base de Vault.
+    Si el address es 'ENV', lee la variable de entorno VAULT_ADDR.
+    """
+    if address == "ENV":
+        context.vault_address = os.getenv('VAULT_ADDR', 'http://10.0.0.31:8200')
+    else:
+        context.vault_address = address
+        
     context.response = None
     context.health_data = None
 
 @when('intento obtener la información de salud del sistema Vault')
 def step_when_get_health_info(context: Context):
-    """Llama al endpoint de salud (/v1/sys/health) y almacena la respuesta."""
+    """Llama al endpoint de salud (/v1/sys/health)."""
     health_url = f"{context.vault_address}/v1/sys/health"
     try:
-        # Timeout bajo para fallar rápidamente si el servicio no está
+        # Timeout corto para no bloquear el CI si la red falla
         context.response = requests.get(health_url, timeout=5)
         
-        # Intentar parsear el JSON si la respuesta no es 503 o 501 (que a veces son respuestas vacías)
-        if context.response.status_code in [200, 429]:
+        # Intentamos leer el JSON independientemente del código de estado,
+        # ya que Vault devuelve JSON incluso en errores 429 o 503.
+        try:
             context.health_data = context.response.json()
+        except json.JSONDecodeError:
+            context.health_data = None
             
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.RequestException as e:
+        print(f"Error de conexión: {e}")
         context.response = None
-    except json.JSONDecodeError:
-        context.health_data = {} # Falla si no es JSON
+        context.health_data = None
 
 @then('la conexión debe ser exitosa con un código de estado en el rango 200-503')
 def step_then_connection_successful(context: Context):
-    """Verifica que la conexión fue posible y el código es válido para Vault."""
+    """Verifica conectividad HTTP básica."""
     if context.response is None:
-        pytest.fail(f"Fallo de conexión: Vault no es accesible en {context.vault_address}")
+        pytest.fail(f"Fallo crítico: No se pudo conectar a Vault en {context.vault_address}")
         
     assert context.response.status_code in VALID_STATUS_CODES, \
-        f"Vault respondió con código inesperado: {context.response.status_code}"
+        f"Código de estado inesperado: {context.response.status_code}. Respuesta: {context.response.text}"
 
 @then('el estado de inicialización de Vault debe ser {expected_state}')
 def step_then_vault_initialized(context: Context, expected_state: str):
-    """Verifica si el campo 'initialized' es True o False."""
+    """Verifica initialized = true/false."""
     expected_bool = expected_state.lower() == 'true'
     
-    # Si el código es 501 (Not Initialized), la respuesta implícita es False
+    # Si no hay data pero el código es 501, no está inicializado
     if context.response and context.response.status_code == 501:
         actual_state = False
-    elif context.health_data is not None:
-        actual_state = context.health_data.get('initialized')
+    elif context.health_data:
+        actual_state = context.health_data.get('initialized', False)
     else:
-        pytest.fail("No se pudo obtener información de salud para verificar la inicialización.")
+        pytest.fail("No hay datos de salud para verificar inicialización.")
 
     assert actual_state == expected_bool, \
-        f"Vault Initialization Falló: Esperado {expected_bool}, Obtenido {actual_state}"
+        f"Fallo Inicialización: Esperaba {expected_bool}, obtuvo {actual_state}"
 
 @then('el estado de sellado de Vault debe ser {expected_state}')
 def step_then_vault_sealed(context: Context, expected_state: str):
-    """Verifica si el campo 'sealed' es True o False."""
+    """Verifica sealed = true/false."""
     expected_bool = expected_state.lower() == 'true'
     
-    # El estado 'sealed' es relevante si Vault está inicializado.
-    if context.health_data is not None:
+    if context.health_data:
         actual_state = context.health_data.get('sealed')
     else:
-        pytest.fail("No se pudo obtener información de salud para verificar el estado de sellado.")
+        pytest.fail("No hay datos de salud para verificar estado de sellado.")
 
     assert actual_state == expected_bool, \
-        f"Vault Sealed State Falló: Esperado {expected_bool}, Obtenido {actual_state}"
+        f"Fallo Estado Sellado: Esperaba {expected_bool}, obtuvo {actual_state}"
