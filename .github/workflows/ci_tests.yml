@@ -85,6 +85,36 @@ jobs:
         echo "pg_lease_id=$PG_LEASE_ID" >> $GITHUB_OUTPUT 
         echo "✅ Credenciales PostgreSQL obtenidas (Lease ID: $PG_LEASE_ID)."
 
+
+
+
+        
+    - name: 2.2.5 Debug creds
+      id: redis_debug
+      run: |
+        # Usamos la variable de entorno REDIS_ROLE_NAME
+        echo ">>> INTENTANDO OBTENER CREDENCIALES COMBINADAS (PG + REDIS)..."
+        REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
+        
+        REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
+        REDIS_PASS=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.password')
+        REDIS_LEASE_ID=$(echo "$REDIS_SECRET_DATA" | jq -r '.lease_id')
+        
+        if [ -z "$REDIS_USER" ] || [ "$REDIS_USER" == "null" ]; then
+          echo "❌ Error: No se pudieron obtener las credenciales de Redis."
+          exit 1
+        fi
+        
+        echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
+        echo "::add-mask::$REDIS_PASS"
+        echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
+        
+        echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
+        echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
+
+
+
+
     - name: 2.3 Obtener Credenciales Dinámicas de Redis
       id: redis_creds
       run: |
@@ -106,6 +136,33 @@ jobs:
         
         echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
         echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
+
+
+    - name: 2.3.5 Debug cred post
+      id: redis_debug
+      run: |
+        # Usamos la variable de entorno REDIS_ROLE_NAME
+        echo ">>> CREDENCIALES EXPORTADAS. Continuando con Python..."
+        REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
+        
+        REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
+        REDIS_PASS=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.password')
+        REDIS_LEASE_ID=$(echo "$REDIS_SECRET_DATA" | jq -r '.lease_id')
+        
+        if [ -z "$REDIS_USER" ] || [ "$REDIS_USER" == "null" ]; then
+          echo "❌ Error: No se pudieron obtener las credenciales de Redis."
+          exit 1
+        fi
+        
+        echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
+        echo "::add-mask::$REDIS_PASS"
+        echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
+        
+        echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
+        echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
+
+
+
 
     # --- TAREA 3: PREPARAR Y EJECUTAR PRUEBAS ---
     
