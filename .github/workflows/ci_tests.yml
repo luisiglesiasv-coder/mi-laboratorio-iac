@@ -85,7 +85,7 @@ jobs:
         pip install -r requirements.txt
         
     - name: 3.2 Ejecutar Pruebas BDD
-      run: ./venv/bin/behave -i tests/features
+      run: ./venv/bin/behave tests/features
       env:
         DB_HOST: 10.0.0.31
         REDIS_HOST: 10.0.0.31
