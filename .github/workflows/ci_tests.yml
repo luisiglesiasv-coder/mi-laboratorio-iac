@@ -15,7 +15,7 @@ jobs:
       VAULT_ADDR: http://10.0.0.31:8200
       VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
       VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-      REDIS_ROLE_NAME: redis-runner-role
+      REDIS_ROLE_NAME: redis-runner_role
       
     steps:
     - name: Checkout del Código
@@ -50,7 +50,7 @@ jobs:
       id: creds
       run: |
         # --- PostgreSQL ---
-        PG_DATA=$(vault read -format=json database/creds/runner-role)
+        PG_DATA=$(vault read -format=json database/creds/runner_role)
         DB_USER=$(echo "$PG_DATA" | jq -r '.data.username')
         DB_PASS=$(echo "$PG_DATA" | jq -r '.data.password')
         PG_LEASE=$(echo "$PG_DATA" | jq -r '.lease_id') 
