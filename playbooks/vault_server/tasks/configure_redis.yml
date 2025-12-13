@@ -35,8 +35,10 @@
       default_ttl: "1h"
       max_ttl: "24h"
       
-      # SOLUCIÓN AL ERROR DE VARIABLES:
-      # Usamos !unsafe para que Ansible ignore las llaves {{...}} y envíe el texto tal cual a Vault.
-      # Vault es quien debe sustituir {{name}} y {{password}} al crear el usuario, no Ansible.
-      creation_statements: !unsafe '["ACL SETUSER {{name}} on >{{password}} +@all ~*"]'
-      revocation_statements: !unsafe '["ACL DELUSER {{name}}"]'
+      # CORRECCIÓN DEFINITIVA:
+      # 1. No incluimos "ACL SETUSER {{name}}" (el plugin lo pone solo).
+      # 2. Pasamos una cadena que contiene una lista JSON escapada.
+      creation_statements: !unsafe '["[\"on\", \">{{password}}\", \"+@all\", \"~*\"]"]'
+      
+      # Para revocation, el plugin suele necesitar el comando completo
+      revocation_statements: !unsafe '["[\"ACL\", \"DELUSER\", \"{{name}}\"]"]'

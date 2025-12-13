@@ -56,7 +56,6 @@ jobs:
         PG_LEASE=$(echo "$PG_DATA" | jq -r '.lease_id') 
 
         # --- Redis ---
-        echo "RESULTADO: $(vault read -format=json database/creds/$REDIS_ROLE_NAME)"
         REDIS_DATA=$(vault read -format=json database/creds/$REDIS_ROLE_NAME)
         REDIS_USER=$(echo "$REDIS_DATA" | jq -r '.data.username')
         REDIS_PASS=$(echo "$REDIS_DATA" | jq -r '.data.password')
