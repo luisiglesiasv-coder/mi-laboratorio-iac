@@ -50,13 +50,13 @@ jobs:
       id: creds
       run: |
         # --- PostgreSQL ---
-        PG_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/runner-role)
+        PG_DATA=$(vault read -format=json database/creds/runner-role)
         DB_USER=$(echo "$PG_DATA" | jq -r '.data.username')
         DB_PASS=$(echo "$PG_DATA" | jq -r '.data.password')
         PG_LEASE=$(echo "$PG_DATA" | jq -r '.lease_id') 
 
         # --- Redis ---
-        REDIS_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
+        REDIS_DATA=$(vault read -format=json database/creds/$REDIS_ROLE_NAME)
         REDIS_USER=$(echo "$REDIS_DATA" | jq -r '.data.username')
         REDIS_PASS=$(echo "$REDIS_DATA" | jq -r '.data.password')
         REDIS_LEASE=$(echo "$REDIS_DATA" | jq -r '.lease_id')
