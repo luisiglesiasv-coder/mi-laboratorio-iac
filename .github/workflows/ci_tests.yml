@@ -15,7 +15,7 @@ jobs:
       VAULT_ADDR: http://10.0.0.31:8200
       VAULT_ROLE_ID: ${{ secrets.VAULT_ROLE_ID }}
       VAULT_SECRET_ID: ${{ secrets.VAULT_SECRET_ID }}
-      REDIS_ROLE_NAME: redis-runner_role
+      REDIS_ROLE_NAME: redis-runner-role
       
     steps:
     - name: Checkout del Código
