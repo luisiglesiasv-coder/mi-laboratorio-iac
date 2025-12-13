@@ -86,63 +86,11 @@ jobs:
         echo "✅ Credenciales PostgreSQL obtenidas (Lease ID: $PG_LEASE_ID)."
 
 
-
-
-        
-    - name: 2.2.5 Debug creds
-      id: redis_debug
-      run: |
-        # Usamos la variable de entorno REDIS_ROLE_NAME
-        echo ">>> INTENTANDO OBTENER CREDENCIALES COMBINADAS (PG + REDIS)..."
-        REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
-        
-        REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
-        REDIS_PASS=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.password')
-        REDIS_LEASE_ID=$(echo "$REDIS_SECRET_DATA" | jq -r '.lease_id')
-        
-        if [ -z "$REDIS_USER" ] || [ "$REDIS_USER" == "null" ]; then
-          echo "❌ Error: No se pudieron obtener las credenciales de Redis."
-          exit 1
-        fi
-        
-        echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
-        echo "::add-mask::$REDIS_PASS"
-        echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
-        
-        echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
-        echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
-
-
-
-
-    - name: 2.3 Obtener Credenciales Dinámicas de Redis
+    - name: 2.2.5 Obtener Credenciales Dinámicas de Redis
       id: redis_creds
       run: |
         # Usamos la variable de entorno REDIS_ROLE_NAME
-        REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
-        
-        REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
-        REDIS_PASS=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.password')
-        REDIS_LEASE_ID=$(echo "$REDIS_SECRET_DATA" | jq -r '.lease_id')
-        
-        if [ -z "$REDIS_USER" ] || [ "$REDIS_USER" == "null" ]; then
-          echo "❌ Error: No se pudieron obtener las credenciales de Redis."
-          exit 1
-        fi
-        
-        echo "REDIS_USER=$REDIS_USER" >> $GITHUB_ENV
-        echo "::add-mask::$REDIS_PASS"
-        echo "REDIS_PASS=$REDIS_PASS" >> $GITHUB_ENV
-        
-        echo "redis_lease_id=$REDIS_LEASE_ID" >> $GITHUB_OUTPUT
-        echo "✅ Credenciales Redis obtenidas (Lease ID: $REDIS_LEASE_ID)."
-
-
-    - name: 2.3.5 Debug cred post
-      id: redis_debug
-      run: |
-        # Usamos la variable de entorno REDIS_ROLE_NAME
-        echo ">>> CREDENCIALES EXPORTADAS. Continuando con Python..."
+        echo ">>> INTENTANDO OBTENER CREDENCIALES REDIS..."
         REDIS_SECRET_DATA=$(vault read -token="$VAULT_TOKEN" -format=json database/creds/$REDIS_ROLE_NAME)
         
         REDIS_USER=$(echo "$REDIS_SECRET_DATA" | jq -r '.data.username')
@@ -163,9 +111,9 @@ jobs:
 
 
 
-
+        
     # --- TAREA 3: PREPARAR Y EJECUTAR PRUEBAS ---
-    
+      
     - name: 3.1 Instalar Dependencias de Python
       run: |
         python3 -m venv venv
@@ -175,12 +123,16 @@ jobs:
     - name: 3.2 Ejecutar Pruebas BDD Behave
       run: ./venv/bin/behave -i tests/features
       env:
-        # Variables de Conexión
+        # Variables de Conexión (OK)
         DB_HOST: 10.0.0.31
         REDIS_HOST: 10.0.0.31
         WEB_HOST: 10.0.0.23
-        # Variables de Credenciales (Ya exportadas por pasos anteriores)
-        # DB_USER, DB_PASS, REDIS_USER, REDIS_PASS
+        # Inyectamos explícitamente las credenciales que cargamos en el ENV global
+        DB_USER: ${{ env.DB_USER }}
+        DB_PASS: ${{ env.DB_PASS }}
+        REDIS_USER: ${{ env.REDIS_USER }}
+        REDIS_PASS: ${{ env.REDIS_PASS }}
+        
         
     # --- TAREA 4: REVOCACIÓN Y LIMPIEZA (CRUCIAL) ---
 
