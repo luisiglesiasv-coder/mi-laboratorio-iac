@@ -1,0 +1,8 @@
+---
+- name: Converge Nginx
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: "Include nginx_server"
+      ansible.builtin.include_role:
+        name: "nginx_server"

@@ -1,0 +1,44 @@
+---
+# Main tasks for nginx_server role
+
+- name: 1. Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: yes
+
+- name: 2. Remove default Nginx configuration
+  # Best practice: remove the default site to avoid conflicts
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload Nginx
+
+- name: 3. Create site configuration from template
+  # We use the Jinja2 template created in step 80
+  ansible.builtin.template:
+    src: site.conf.j2
+    dest: "/etc/nginx/sites-available/{{ nginx_server_name }}.conf"
+    mode: '0644'
+  notify: Reload Nginx
+
+- name: 4. Enable the new site configuration
+  # Create a symbolic link from available to enabled
+  ansible.builtin.file:
+    src: "/etc/nginx/sites-available/{{ nginx_server_name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ nginx_server_name }}.conf"
+    state: link
+  notify: Reload Nginx
+
+- name: 5. Ensure Nginx service is started and enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: yes
+    
+- name: 6. Create a basic index.html for testing
+  # This provides content so Nginx returns 200 OK instead of 403 Forbidden
+  ansible.builtin.copy:
+    content: "<html><body><h1>Lab Infrastructure - Nginx is Working</h1></body></html>"
+    dest: /var/www/html/index.html
+    mode: '0644'

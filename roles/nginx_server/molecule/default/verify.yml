@@ -1,0 +1,25 @@
+---
+# Verification playbook for nginx_server
+- name: Verify Nginx Service
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: 1. Check if Nginx is listening on port 80
+      ansible.builtin.wait_for:
+        port: 80
+        timeout: 10
+
+    - name: 2. Verify HTTP response from Nginx
+      # This performs a real HTTP request inside the container
+      ansible.builtin.uri:
+        url: "http://localhost"
+        method: GET
+        status_code: 200
+      register: http_response
+
+    - name: 3. Assert Nginx is serving content correctly
+      ansible.builtin.assert:
+        that:
+          - "http_response.status == 200"
+        success_msg: "Success! Nginx is serving traffic on lab.local"

@@ -1,0 +1,4 @@
+# roles/nginx_server/molecule/default/group_vars/all.yml
+---
+nginx_server_name: "lab.local"
+nginx_listen_port: 80
