@@ -1,0 +1,4 @@
+---
+# Shared variables for all Molecule playbooks (converge, verify, etc.)
+# This is our Single Source of Truth for testing
+redis_master_password: "molecule_test_password"

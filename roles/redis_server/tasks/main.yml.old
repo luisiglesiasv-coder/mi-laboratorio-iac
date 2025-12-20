@@ -3,7 +3,9 @@
 
 - name: 1. Instalar el paquete Redis Server
   ansible.builtin.apt:
-    name: redis-server
+    name: 
+       - redis-server
+       - python3-redis
     state: present
     update_cache: yes
     

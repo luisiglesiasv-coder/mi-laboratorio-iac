@@ -1,0 +1,7 @@
+---
+- name: Converge
+  hosts: all
+  tasks:
+    - name: "Include postgres_server"
+      include_role:
+        name: "postgres_server"

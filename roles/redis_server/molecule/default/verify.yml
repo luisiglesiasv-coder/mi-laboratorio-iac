@@ -1,0 +1,30 @@
+---
+# Official verification based on community.general.redis_info docs
+- name: Verify Redis Service
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: 1. Check if Redis is listening on port 6379
+      ansible.builtin.wait_for:
+        port: 6379
+        timeout: 10
+
+    - name: 2. Get Redis Information
+      community.general.redis_info:
+        login_host: localhost
+        login_port: 6379
+        login_password: "{{ redis_master_password }}"
+      register: redis_output
+
+    - name: 3. Assert Redis is healthy
+      # We use 'get' to avoid "attribute not found" errors
+      # It checks for 'role' at the top level OR inside an 'info' dictionary
+      ansible.builtin.assert:
+        that:
+          - >
+            (redis_output.role | default('') == 'master') or 
+            (redis_output.info.replication.role | default('') == 'master') or
+            (redis_output.info.role | default('') == 'master')
+        success_msg: "Redis authentication and role verified successfully!"
+        fail_msg: "Could not find 'role: master' in the returned data."

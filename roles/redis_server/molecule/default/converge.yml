@@ -1,0 +1,8 @@
+---
+- name: Converge Redis
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: "Include redis_server"
+      include_role:
+        name: "redis_server"

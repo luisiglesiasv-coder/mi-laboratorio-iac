@@ -1,0 +1,27 @@
+---
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check if PostgreSQL is listening on port 5432
+      # Ensure the service is bound to the standard port and reachable
+      ansible.builtin.wait_for:
+        port: 5432
+        timeout: 10
+
+    - name: Execute a basic SQL query to confirm database presence
+      # Test the data plane by querying the current database name
+      community.postgresql.postgresql_query:
+        db: "app_db"
+        login_user: "postgres"
+        query: "SELECT current_database();"
+      register: db_name_output
+      become: true
+      become_user: postgres
+
+    - name: Assert connectivity to the target database
+      # Validate that the returned database name matches our expectation
+      ansible.builtin.assert:
+        that: "db_name_output.query_result[0].current_database == 'app_db'"
+        fail_msg: "Error! Could not connect to app_db or database name mismatch."
+        success_msg: "Success! SQL connection verified for database app_db."

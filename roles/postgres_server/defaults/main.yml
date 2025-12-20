@@ -1,0 +1,8 @@
+---
+# Default variables for postgres_server
+# These can be overridden in your playbook's vars section.
+
+pg_version: "17"
+pg_listen_addresses: "*"
+pg_allowed_subnet: "10.0.0.0/24"  # Default for your current home lab
+pg_vault_bootstrap_password: "ChangeMeInProduction!"

@@ -1,7 +1,7 @@
 ---
-# Handlers del Role redis_server
+#  redis_server role handlers
 
-- name: Reiniciar Redis
+- name: Restart Redis
   ansible.builtin.service:
     name: redis-server
     state: restarted

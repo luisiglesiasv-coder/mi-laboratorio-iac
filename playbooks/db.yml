@@ -1,16 +1,17 @@
 ---
-- name: FASE 2 | Configuración del Servidor de Base de Datos (PostgreSQL)
+- name: Phase 2 - Database Infrastructure and Application Setup
   hosts: db-node
   become: true
   vars:
-    vault_token: "hvs.TlA2xCHPWSebAjrI9NTnxI3G"
-    pg_version: "17" # 🚨 AGREGAR: Define la versión para rutas dinámicas
-    pg_vault_password: "PostgreSQL*123" # 🚨 AGREGAR: Contraseña que Vault usará
+    vault_token: "hvs.TlA2xCHPWSebAjrI9NTnxI3G" # Placeholder for dynamic credentials
+    pg_version: "17"
+    pg_vault_password: "PostgreSQL*123" 
     
+  roles:
+    - postgres_server # Standardized role call
+
   tasks:
-    
-    # 1. Leer el secreto de Vault
-    - name: 1. Leer contraseña de Vault
+    - name: Vault Integration - Fetch application secrets from KV store
       ansible.builtin.uri:
         url: http://10.0.0.31:8200/v1/kv/production/db
         method: GET
@@ -18,66 +19,7 @@
           X-Vault-Token: "{{ vault_token }}"
       register: db_secret
 
-    
-    - name: (CLEANUP) Eliminar directorio temporal conflictivo para postgres
-      ansible.builtin.file:
-        path: /var/lib/postgresql/.ansible
-        state: absent
-      become: true
-
-    - name: 2. Instalar PostgreSQL y librería para Python
-      ansible.builtin.apt:
-        name: 
-          - postgresql
-          - python3-psycopg2
-        state: present
-        update_cache: yes
-    
-    - name: 3. Asegurar que PostgreSQL esté corriendo
-      ansible.builtin.service:
-        name: postgresql
-        state: started
-        enabled: yes
-    
-    # --- TAREAS DE ACCESIBILIDAD ---
-
-    - name: 3.1. Configurar 'postgresql.conf' para escuchar en todas las IPs ('*')
-      ansible.builtin.lineinfile:
-        path: /etc/postgresql/{{ pg_version }}/main/postgresql.conf # ✅ CORREGIDO
-        regexp: '^#?listen_addresses'
-        line: "listen_addresses = '*'"
-        state: present
-      notify: Reiniciar PostgreSQL
-
-    - name: 3.2. Configurar 'pg_hba.conf' - Forzar autenticación MD5 para Loopback (127.0.0.1)
-      ansible.builtin.lineinfile:
-        path: /etc/postgresql/{{ pg_version }}/main/pg_hba.conf # ✅ CORREGIDO
-        regexp: '^\s*host\s+all\s+all\s+127\.0\.0\.1/32\s+(scram-sha-256|md5|peer|ident)'
-        line: "host\t all\t all\t 127.0.0.1/32\t\t md5"
-        state: present
-      notify: Reiniciar PostgreSQL
-
-    - name: 3.3. Configurar 'pg_hba.conf'- Permitir autenticación MD5 para red 10.0.0.0/24
-      ansible.builtin.lineinfile:
-        path: /etc/postgresql/{{ pg_version }}/main/pg_hba.conf # ✅ CORREGIDO
-        line: "host\t all\t all\t 10.0.0.0/24\t\t md5"
-        state: present
-        insertafter: EOF
-      notify: Reiniciar PostgreSQL
-
-    # ----------------------------------------------------
-    # 🚨 TAREA CRÍTICA AÑADIDA 🚨
-    # ----------------------------------------------------
-    - name: 4. Asignar Contraseña al Superusuario 'postgres' (Para Conexión de Vault)
-      ansible.builtin.postgresql_user:
-        login_user: postgres
-        name: postgres
-        password: "{{ pg_vault_password }}" # Usamos la nueva contraseña fuerte
-        state: present
-      become_user: postgres
-    # ----------------------------------------------------
-
-    - name: '5. Crear usuario de base de datos (Ejemplo: app_user)' # Antes Tarea 4
+    - name: Application Setup - Create application database user (app_user)
       ansible.builtin.postgresql_user:
         login_user: postgres
         name: app_user
@@ -85,7 +27,7 @@
         state: present
       become_user: postgres
       
-    - name: '6. Crear la base de datos de la aplicación (Ejemplo: app_db)' # Antes Tarea 5
+    - name: Application Setup - Create application database (app_db)
       ansible.builtin.postgresql_db:
         login_user: postgres
         name: app_db
@@ -93,9 +35,3 @@
         encoding: UTF-8
         state: present
       become_user: postgres
-
-  handlers:
-    - name: Reiniciar PostgreSQL
-      ansible.builtin.service:
-        name: postgresql
-        state: restarted

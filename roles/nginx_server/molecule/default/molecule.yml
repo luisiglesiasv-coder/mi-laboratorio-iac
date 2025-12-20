@@ -1,0 +1,24 @@
+---
+dependency:
+  name: galaxy
+  enabled: false # avoid SSL error in Mac
+driver:
+  name: docker
+platforms:
+  - name: nginx-instance
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    privileged: true
+    command: /sbin/init
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../../
+  config_options:
+    defaults:
+      host_key_checking: false
+      interpreter_python: auto_silent
+verifier:
+  name: ansible

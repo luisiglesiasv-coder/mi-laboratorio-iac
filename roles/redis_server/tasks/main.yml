@@ -1,0 +1,65 @@
+---
+# Main tasks for the redis_server role
+
+- name: 1. Install Redis Server and Python dependencies
+  # Installs the Redis engine and the library needed for Ansible Redis modules
+  ansible.builtin.apt:
+    name: 
+       - redis-server
+       - python3-redis
+    state: present
+    update_cache: yes
+    
+- name: 2. Bind Redis to all network interfaces (0.0.0.0)
+  # Allows remote connections instead of only local loopback
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^\s*bind\s+127\.0\.0\.1.*'
+    line: 'bind 0.0.0.0'
+    state: present
+  notify: Restart Redis
+
+- name: 3. Disable protected-mode to permit external connections
+  # Security is now managed via password authentication (requirepass)
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: '^protected-mode yes'
+    line: 'protected-mode no'
+    backup: yes
+  notify: Restart Redis
+
+- name: 4. Configure Redis authentication password (requirepass)
+  # Sets the access password using the variable from Molecule/Vault
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    line: "requirepass {{ redis_master_password }}" 
+    regexp: '^# requirepass' 
+    insertafter: EOF
+    backup: yes
+  notify: Restart Redis
+  
+- name: 5. Ensure Redis service is started and enabled
+  # Ensures systemd manages the service and starts it on boot
+  ansible.builtin.service:
+    name: redis-server
+    state: started
+    enabled: yes
+
+- name: 6. Ensure local files directory exists on Control Node
+  # Creates the central 'files' folder in the project root if missing
+  # Path: mi-laboratorio-iac/files/
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../../../../files"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+
+- name: 7. Export master password to local project directory
+  # Saves the generated password to the host for future Vault ingestion
+  ansible.builtin.copy:
+    content: "{{ redis_master_password }}"
+    dest: "{{ playbook_dir }}/../../../../files/redis_master_password.txt"
+    mode: '0600'
+  delegate_to: localhost
+  run_once: true

@@ -1,13 +1,25 @@
-# .gitignore
-
-# Entorno virtual
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 venv/
 .env
 
-# Cachés de Pytest
-.pytest_cache/
-.pytest_cache/
+# Ansible & Molecule
+.molecule/
+molecule/*/roles/
+molecule/*/.molecule/
+molecule/*/instance_config.yml
+molecule/*/state.yml
+*.log
+.ansible/
 
-# Cachés de Python
-__pycache__/
-*.pyc
+# OS specific
+.DS_Store
+.idea/
+.vscode/
+
+# Project specific
+# We ignore the files folder to prevent uploading passwords to GitHub
+# Once we have Vault, we will manage this differently
+files/*.txt

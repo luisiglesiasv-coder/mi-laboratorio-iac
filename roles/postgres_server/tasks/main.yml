@@ -1,0 +1,30 @@
+---
+# tasks/main.yml for postgres_server
+- name: Install PostgreSQL and required Python libraries
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      - python3-psycopg2
+    state: present
+    update_cache: yes
+
+- name: Ensure PostgreSQL is started and enabled
+  ansible.builtin.service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Create PostgreSQL database
+  community.postgresql.postgresql_db:
+    name: app_db
+  become: yes
+  become_user: postgres
+
+- name: Create PostgreSQL user
+  community.postgresql.postgresql_user:
+    db: app_db
+    name: app_user
+    password: secure_password
+    priv: "ALL"
+  become: yes
+  become_user: postgres

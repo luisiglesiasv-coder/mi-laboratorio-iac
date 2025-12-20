@@ -24,65 +24,65 @@ Vault actúa como un intermediario de confianza que:
 * **Runner:** El servidor o agente encargado de ejecutar los trabajos definidos en el pipeline de CI/CD.
 * **HashiCorp Vault:** Herramienta para gestionar secretos y proteger datos sensibles. Proporciona una interfaz unificada para acceder a secretos, manejar la autenticación y auditar el acceso.
 
-1. ¿Qué es un "Secreto" en Vault?
-Concepto General
+### 1. ¿Qué es un "Secreto" en Vault?
+**Concepto General**
 En el mundo del desarrollo de software, un "secreto" es cualquier pieza de información sensible que no debe ser pública y cuyo acceso debe estar estrictamente controlado. Si esta información cae en manos equivocadas, podría comprometer tu sistema, tus datos o los de tus usuarios.
 
-Definición en Vault
+**Definición en Vault**
 En HashiCorp Vault, un secreto es cualquier dato que Vault almacena de forma encriptada o que genera dinámicamente bajo demanda. Vault actúa como una caja fuerte digital: tú metes datos sensibles dentro, Vault cierra la puerta, encripta el contenido y solo permite abrirla a quien demuestre tener la llave correcta (autenticación) y el permiso adecuado (políticas).
 
 Es importante distinguir entre dos tipos de secretos en Vault:
 
-Secretos Estáticos (Static Secrets): Son datos que tú guardas en Vault y que no cambian a menos que tú los actualices. Vault solo los almacena y los devuelve cuando se le piden.
+* **Secretos Estáticos (Static Secrets):** Son datos que tú guardas en Vault y que no cambian a menos que tú los actualices. Vault solo los almacena y los devuelve cuando se le piden.
 
-Secretos Dinámicos (Dynamic Secrets): Esta es la "magia" de Vault. No existen hasta que alguien los pide. Cuando una aplicación solicita un secreto dinámico, Vault se conecta al sistema destino (ej. una base de datos) y crea unas credenciales nuevas, únicas y temporales (con un tiempo de vida o TTL) solo para esa petición.
+* **Secretos Dinámicos (Dynamic Secrets):** Esta es la "magia" de Vault. No existen hasta que alguien los pide. Cuando una aplicación solicita un secreto dinámico, Vault se conecta al sistema destino (ej. una base de datos) y crea unas credenciales nuevas, únicas y temporales (con un tiempo de vida o TTL) solo para esa petición.
 
-Ejemplos Ilustrativos
-Ejemplo 1: Un Secreto Estático (KeyValue) Imagina que tu aplicación necesita una clave de API para conectarse a un servicio de pagos externo como Stripe. Esta clave rara vez cambia.
+**Ejemplos Ilustrativos**
+* **Ejemplo 1: Un Secreto Estático (KeyValue)** Imagina que tu aplicación necesita una clave de API para conectarse a un servicio de pagos externo como Stripe. Esta clave rara vez cambia.
 
-Sin Vault: Guardarías la clave sk_live_12345ABCDE en un archivo .env en tu servidor o en el código fuente (¡muy mala práctica!).
+   * **Sin Vault:** Guardarías la clave `sk_live_12345ABCDE` en un archivo `.env` en tu servidor o en el código fuente (¡muy mala práctica!).
 
-Con Vault: Guardas la clave dentro del motor de secretos Key-Value (KV) de Vault en una ruta como secret/pagos/stripe. Cuando tu aplicación arranca, se autentica en Vault y lee el valor de esa ruta de forma segura.
+   * **Con Vault:** Guardas la clave dentro del motor de secretos Key-Value (KV) de Vault en una ruta como `secret/pagos/stripe`. Cuando tu aplicación arranca, se autentica en Vault y lee el valor de esa ruta de forma segura.
 
-Ejemplo 2: Un Secreto Dinámico (Base de Datos) Este es el caso que hemos implementado en nuestro proyecto. Tu "Runner" de CI/CD necesita acceder a PostgreSQL para pasar unos tests.
+* **Ejemplo 2: Un Secreto Dinámico (Base de Datos)** Este es el caso que hemos implementado en nuestro proyecto. Tu "Runner" de CI/CD necesita acceder a PostgreSQL para pasar unos tests.
 
-Sin Vault: Crearías un usuario runner_user con la contraseña Passw0rd123! en PostgreSQL y pondrías esas credenciales fijas en las variables de entorno de tu sistema de CI/CD. Si alguien roba esas variables, tiene acceso permanente a tu base de datos.
+   *  **Sin Vault:** Crearías un usuario runner_user con la contraseña `Passw0rd123!` en PostgreSQL y pondrías esas credenciales fijas en las variables de entorno de tu sistema de CI/CD. Si alguien roba esas variables, tiene acceso permanente a tu base de datos. 
 
-Con Vault: El Runner le pide a Vault acceso a PostgreSQL. Vault se conecta a la base de datos y ejecuta un comando como: CREATE USER "v-token-h2s8d7..." WITH PASSWORD "A1b2C3d4..."; Vault devuelve esas credenciales raras y temporales al Runner. Después de 1 hora (el TTL), Vault borrará automáticamente ese usuario. El secreto no existía antes de pedirlo y dejará de existir poco después.
+   * **Con Vault:** El Runner le pide a Vault acceso a PostgreSQL. Vault se conecta a la base de datos y ejecuta un comando como: `CREATE USER "v-token-h2s8d7..." WITH PASSWORD "A1b2C3d4...";` Vault devuelve esas credenciales raras y temporales al Runner. Después de 1 hora (el TTL), Vault borrará automáticamente ese usuario. El secreto no existía antes de pedirlo y dejará de existir poco después.
 
-2. ¿Qué es un "Role" en Vault?
-Concepto General
+### 2. ¿Qué es un "Role" en Vault?
+**Concepto General**
 La palabra "Rol" puede ser confusa porque se usa en muchos contextos (Roles de Ansible, Roles de IAM en AWS, etc.). En Vault, piensa en un Role como una plantilla de configuración o un perfil de comportamiento.
 
 No es una identidad (como un usuario "Juan"), sino un conjunto de reglas que definen cómo Vault debe comportarse cuando alguien realiza una acción específica bajo ese perfil.
 
-Definición en Vault
+**Definición en Vault**
 Un Role en Vault es una definición guardada que le dice a un "Motor de Secretos" (Secrets Engine) o a un "Método de Autenticación" (Auth Method) cómo debe actuar.
 
 Hay principalmente dos tipos de roles que usarás:
 
-Roles de Autenticación (Auth Roles): Definen cómo una máquina o usuario debe presentarse para entrar en Vault y qué políticas de seguridad se le aplicarán una vez dentro.
+* **Roles de Autenticación (Auth Roles):** Definen cómo una máquina o usuario debe presentarse para entrar en Vault y qué políticas de seguridad se le aplicarán una vez dentro.
 
-Roles de Motores de Secretos (Secret Engine Roles): Definen cómo se deben generar los secretos dinámicos. Son la "receta" que Vault sigue para crear un usuario temporal en otro sistema.
+* **Roles de Motores de Secretos (Secret Engine Roles):** Definen cómo se deben generar los secretos dinámicos. Son la "receta" que Vault sigue para crear un usuario temporal en otro sistema.
 
-Ejemplos Ilustrativos
-Ejemplo 1: Role de Autenticación (AppRole) Necesitamos que nuestro servidor de CI/CD (una máquina, no una persona) pueda iniciar sesión en Vault. Usamos el método de autenticación AppRole.
+**Ejemplos Ilustrativos**
+* **Ejemplo 1: Role de Autenticación (AppRole)** Necesitamos que nuestro servidor de CI/CD (una máquina, no una persona) pueda iniciar sesión en Vault. Usamos el método de autenticación AppRole.
 
-Creamos un Role llamado ci-runner en Vault. Este Role no es el servidor en sí, sino la configuración que dice:
+Creamos un Role llamado `ci-runner` en Vault. Este Role no es el servidor en sí, sino la configuración que dice:
 
-"Cualquiera que se loguee usando el perfil ci-runner necesita presentar un RoleID y un SecretID válidos".
+   * "Cualquiera que se loguee usando el perfil ci-runner necesita presentar un RoleID y un SecretID válidos".
 
-"Una vez logueado, asígnale la política de seguridad llamada runner-policy (que solo le permite leer secretos de base de datos y nada más)".
+   * "Una vez logueado, asígnale la política de seguridad llamada runner-policy (que solo le permite leer secretos de base de datos y nada más)".
 
 Es como crear un tipo de "pase de visitante" en una empresa: el rol define qué puertas abre ese tipo de pase.
 
-Ejemplo 2: Role de Motor de Secretos (Database Role) Este es el ejemplo más claro en nuestro proyecto. Hemos configurado Vault para que pueda crear usuarios en Redis. ¿Pero qué tipo de usuarios? ¿Administradores? ¿Solo lectura?
+* **Ejemplo 2: Role de Motor de Secretos (Database Role)** Este es el ejemplo más claro en nuestro proyecto. Hemos configurado Vault para que pueda crear usuarios en Redis. ¿Pero qué tipo de usuarios? ¿Administradores? ¿Solo lectura?
 
-Para definir esto, creamos un Role dentro del motor de bases de datos, por ejemplo, llamado redis-readonly-role. Este Role es una plantilla que contiene:
+Para definir esto, creamos un Role dentro del motor de bases de datos, por ejemplo, llamado `redis-readonly-role`. Este Role es una plantilla que contiene:
 
-La receta (Comandos): "Cuando alguien pida credenciales usando este rol, ejecuta en Redis el comando ACL para crear un usuario que solo tenga permisos de lectura (~* +@read)".
+   * **La receta (Comandos):** "Cuando alguien pida credenciales usando este rol, ejecuta en Redis el comando ACL para crear un usuario que solo tenga permisos de lectura (`~* +@read`)".
 
-La caducidad (TTL): "Las credenciales generadas con esta plantilla solo deben durar 30 minutos".
+   * **La caducidad (TTL):** "Las credenciales generadas con esta plantilla solo deben durar 30 minutos".
 
 Cuando el Runner pide acceso, dice: "Dame credenciales de Redis usando el rol redis-readonly-role". Vault busca esa "receta" y la ejecuta.
 
@@ -146,7 +146,7 @@ graph LR
     %% ============================================================
     %% 3. RUNNER NODE (Sistema Físico Separado - Ejecutor)
     %% ============================================================
-    subgraph Runner_Node ["3. Runner-Node (Ejecutor CI - 10.0.0.30)"]
+    subgraph Runner_Node ["3. Runner-Node (Ejecutor CI - 10.0.0.23)"]
         direction TB
         %% Representamos los pasos del pipeline CI como una cadena lógica
         RN_Start((Inicio Job))
@@ -229,94 +229,94 @@ graph LR
     
 ```
 
-4. Explicación Detallada de Componentes y Flujos
+## 4. Explicación Detallada de Componentes y Flujos
 El diagrama se estructura en cuatro bloques principales que representan sistemas separados física o lógicamente.
 
-4.1. Bloque 1: Máquina de Desarrollo (Ansible Control Node)
+### 4.1. Bloque 1: Máquina de Desarrollo (Ansible Control Node)
 Este es el punto de origen de toda la configuración de infraestructura.
 
-Propósito: Alojar el código de IaC y ejecutar las herramientas de orquestación.
+* **Propósito:** Alojar el código de IaC y ejecutar las herramientas de orquestación.
 
-Componentes Clave:
+* **Componentes Clave:**
 
-Estructura de Proyecto: Organización estándar de Ansible con playbooks (lógica de orquestación), roles (tareas reutilizables) e inventarios.
+    * **Estructura de Proyecto:** Organización estándar de Ansible con playbooks (lógica de orquestación), roles (tareas reutilizables) e inventarios.
 
-Archivos Sensibles (files/, group_vars/): Almacenan las credenciales administrativas iniciales (ej. pg_master_password.txt) necesarias para que Ansible pueda configurar los servicios por primera vez. Estos archivos deben protegerse (ej. usando Ansible Vault).
+    * **Archivos Sensibles (files/, group_vars/):** Almacenan las credenciales administrativas iniciales (ej. pg_master_password.txt) necesarias para que Ansible pueda configurar los servicios por primera vez. Estos archivos deben protegerse (ej. usando Ansible Vault).
 
-Ansible Control Engine: El ejecutable que procesa los playbooks y establece conexiones SSH con los nodos remotos para aplicar la configuración.
+    * **Ansible Control Engine:** El ejecutable que procesa los playbooks y establece conexiones SSH con los nodos remotos para aplicar la configuración.
 
-4.2. Bloque 2: GitHub (Plataforma CI/CD)
+### 4.2. Bloque 2: GitHub (Plataforma CI/CD)
 Actúa como el orquestador de los flujos de trabajo de integración continua.
 
-Propósito: Almacenar el código fuente, definir los pipelines de CI/CD y gestionar los secretos necesarios para la automatización.
+* **Propósito:** Almacenar el código fuente, definir los pipelines de CI/CD y gestionar los secretos necesarios para la automatización.
 
-Componentes Clave:
+* **Componentes Clave:**
 
-Workflow (.github/workflows/ci_tests.yml): Define los eventos que disparan la ejecución de pruebas y los pasos a seguir.
+* **Workflow (.github/workflows/ci_tests.yml):** Define los eventos que disparan la ejecución de pruebas y los pasos a seguir.
 
-GitHub Secrets Store: Almacén seguro para credenciales de CI/CD. Aquí residen las únicas credenciales permanentes que utiliza el runner: VAULT_ROLE_ID y SECRET_ID, necesarias para la autenticación con Vault.
+* **GitHub Secrets Store:** Almacén seguro para credenciales de CI/CD. Aquí residen las únicas credenciales permanentes que utiliza el runner: `VAULT_ROLE_ID` y `SECRET_ID`, necesarias para la autenticación con Vault.
 
-4.3. Bloque 3: Runner-Node (Ejecutor CI - 10.0.0.30)
+### 4.3. Bloque 3: Runner-Node (Ejecutor CI - 10.0.0.23)
 Un servidor dedicado a la ejecución de los trabajos del pipeline. Es un entorno efímero en términos de secretos; no almacena credenciales de forma persistente.
 
-Flujo de Ejecución (Job):
+* **Flujo de Ejecución (Job):**
 
-Login AppRole: El runner recibe las credenciales de GitHub (RoleID/SecretID) como variables de entorno y las utiliza para autenticarse contra el método AppRole de Vault.
+    1. **Login AppRole:** El runner recibe las credenciales de GitHub (RoleID/SecretID) como variables de entorno y las utiliza para autenticarse contra el método AppRole de Vault.
 
-Solicitar Credenciales Dinámicas: Una vez autenticado y con un token de Vault válido, solicita credenciales para los servicios backend (PostgreSQL, Redis) a través de los roles configurados en Vault.
+    2. **Solicitar Credenciales Dinámicas:** Una vez autenticado y con un token de Vault válido, solicita credenciales para los servicios backend (PostgreSQL, Redis) a través de los roles configurados en Vault.
 
-Ejecutar Tests: Recibe las credenciales temporales (usuario/contraseña) de Vault y las utiliza para conectarse directamente a los servicios en el DB-Node y ejecutar las pruebas.
+    3. **Ejecutar Tests:** Recibe las credenciales temporales (usuario/contraseña) de Vault y las utiliza para conectarse directamente a los servicios en el DB-Node y ejecutar las pruebas.
 
-4.4. Bloque 4: DB-Node (Servicios y Seguridad - 10.0.0.31)
+### 4.4. Bloque 4: DB-Node (Servicios y Seguridad - 10.0.0.31)
 El servidor central que aloja los datos y el servicio de seguridad.
 
-Componentes Clave:
+* **Componentes Clave:**
 
-Servicios Objetivo: Las instancias de PostgreSQL Server y Redis Server.
+    * **Servicios Objetivo:** Las instancias de PostgreSQL Server y Redis Server.
 
-HashiCorp Vault Service (Puerto 8200):
+    * **HashiCorp Vault Service (Puerto 8200):**
 
-Auth Method (AppRole): El mecanismo de autenticación para máquinas. Valida las credenciales del runner.
+        * **Auth Method (AppRole):** El mecanismo de autenticación para máquinas. Valida las credenciales del runner.
 
-Policy (runner-policy): Define los permisos exactos del runner (ej. solo permiso para leer credenciales dinámicas, no para configurar Vault).
+        * **Policy (runner-policy):** Define los permisos exactos del runner (ej. solo permiso para leer credenciales dinámicas, no para configurar Vault).
 
-Database Engines (PostgreSQL/Redis): Módulos configurados con las credenciales administrativas de cada base de datos, permitiendo a Vault gestionar usuarios.
+        * **Database Engines (PostgreSQL/Redis):** Módulos configurados con las credenciales administrativas de cada base de datos, permitiendo a Vault gestionar usuarios.
 
-Roles (runner-role, redis-runner-role): Plantillas que definen cómo crear los usuarios temporales: qué comandos SQL/ACL ejecutar, qué permisos otorgar y qué TTL aplicar.
+        * **Roles (runner-role, redis-runner-role):** Plantillas que definen cómo crear los usuarios temporales: qué comandos SQL/ACL ejecutar, qué permisos otorgar y qué TTL aplicar.
 
-4.5. Descripción de los Flujos (Flechas)
+### 4.5. Descripción de los Flujos (Flechas)
 El diagrama distingue entre dos tipos principales de flujos:
 
-Flujo de Configuración (Flechas Rojas Superiores): Iniciado manualmente desde la Máquina de Desarrollo. Ansible se conecta vía SSH a los nodos para instalar software y aplicar la configuración base (ej. configurar los Database Engines en Vault con las contraseñas maestras).
+* **Flujo de Configuración (Flechas Rojas Superiores):** Iniciado manualmente desde la Máquina de Desarrollo. Ansible se conecta vía SSH a los nodos para instalar software y aplicar la configuración base (ej. configurar los Database Engines en Vault con las contraseñas maestras).
 
-Flujo de Operación CI/CD (Resto de Flechas):
+* **Flujo de Operación CI/CD (Resto de Flechas):**
 
-GitHub dispara el workflow en el Runner-Node.
+1. GitHub dispara el workflow en el Runner-Node.
 
-El Runner utiliza las credenciales inyectadas por GitHub para autenticarse con Vault (AppRole).
+2. El Runner utiliza las credenciales inyectadas por GitHub para autenticarse con Vault (AppRole).
 
-Vault verifica la identidad y devuelve un token temporal.
+3. Vault verifica la identidad y devuelve un token temporal.
 
-El Runner usa el token para solicitar credenciales dinámicas para una base de datos específica.
+4. El Runner usa el token para solicitar credenciales dinámicas para una base de datos específica.
 
-Gestión Interna (Flechas Gruesas Verdes): Vault intercepta la solicitud, se conecta al servicio backend usando su conexión administrativa y crea un usuario temporal según la definición del Rol.
+5. **Gestión Interna (Flechas Gruesas Verdes):** Vault intercepta la solicitud, se conecta al servicio backend usando su conexión administrativa y crea un usuario temporal según la definición del Rol.
 
-Vault devuelve las credenciales temporales al Runner.
+6. Vault devuelve las credenciales temporales al Runner.
 
-El Runner utiliza estas credenciales para conectarse directamente a los servicios objetivo y realizar sus tareas.
+7. El Runner utiliza estas credenciales para conectarse directamente a los servicios objetivo y realizar sus tareas.
 
-
+---
 
 # Implementación de Secretos Dinámicos para Redis con HashiCorp Vault
 
-1. Introducción y Propósito
+## 1. Introducción y Propósito
 El objetivo de esta configuración es pasar de un modelo de seguridad estático a uno dinámico para el acceso a nuestra base de datos Redis.
 
-El Problema (Modelo Estático): Tradicionalmente, las aplicaciones usan una "contraseña maestra" de Redis de larga duración. Si esta contraseña se filtra, toda la base de datos se ve comprometida hasta que se rota la contraseña en todas partes.
+**El Problema (Modelo Estático):** Tradicionalmente, las aplicaciones usan una "contraseña maestra" de Redis de larga duración. Si esta contraseña se filtra, toda la base de datos se ve comprometida hasta que se rota la contraseña en todas partes.
 
-La Solución (Modelo Dinámico): Utilizamos HashiCorp Vault. Vault actúa como un intermediario de confianza. Cuando una aplicación necesita acceder a Redis, no usa la contraseña maestra. En su lugar, le pide credenciales a Vault. Vault se conecta a Redis, crea un usuario temporal con permisos limitados y un tiempo de vida corto (TTL), y le entrega esas credenciales a la aplicación. Cuando el tiempo expira, el usuario se borra automáticamente.
+**La Solución (Modelo Dinámico):** Utilizamos HashiCorp Vault. Vault actúa como un intermediario de confianza. Cuando una aplicación necesita acceder a Redis, no usa la contraseña maestra. En su lugar, le pide credenciales a Vault. Vault se conecta a Redis, crea un usuario temporal con permisos limitados y un tiempo de vida corto (TTL), y le entrega esas credenciales a la aplicación. Cuando el tiempo expira, el usuario se borra automáticamente.
 
-2. Diagrama de Arquitectura y Flujo
+## 2. Diagrama de Arquitectura y Flujo
 Este diagrama ilustra los dos pasos principales que hemos automatizado con Ansible: preparar el servidor Redis y configurar el motor de secretos de Vault.
 
 ```mermaid
@@ -360,17 +360,17 @@ graph TD
 ```
 
 
-3. Explicación Detallada de la Configuración
+### 3. Explicación Detallada de la Configuración
 Hemos dividido el proceso en tres pasos críticos que resolvimos durante la implementación.
 
-Paso 1: Preparar la Red de Redis (El problema del "Connection Refused")
-El Desafío: Por defecto, Redis está configurado por seguridad para escuchar solo en la interfaz de loopback (127.0.0.1). Esto significa que solo acepta conexiones que provienen de la misma máquina. Aunque Vault esté en la misma máquina, al intentar conectarse usando la IP de la red (10.0.0.31), Redis rechazaba la conexión.
+### Paso 1: Preparar la Red de Redis (El problema del "Connection Refused")
+**El Desafío:** Por defecto, Redis está configurado por seguridad para escuchar solo en la interfaz de loopback (127.0.0.1). Esto significa que solo acepta conexiones que provienen de la misma máquina. Aunque Vault esté en la misma máquina, al intentar conectarse usando la IP de la red (10.0.0.31), Redis rechazaba la conexión.
 
-La Solución: Modificamos la configuración de Redis (/etc/redis/redis.conf) para que escuche en todas las interfaces de red (0.0.0.0).
+**La Solución:** Modificamos la configuración de Redis (/etc/redis/redis.conf) para que escuche en todas las interfaces de red (0.0.0.0).
 
-Lección Aprendida (Ansible y Regex): Inicialmente, nuestra tarea de Ansible usaba una expresión regular muy genérica (^bind .*) para encontrar la línea a cambiar. Esto provocó que, si se ejecutaba varias veces, no reemplazara la línea restrictiva original, sino que añadiera líneas nuevas al final, creando una configuración conflictiva. Aprendimos a usar expresiones regulares (Regex) específicas para ser quirúrgicos en nuestros cambios.
+**Lección Aprendida (Ansible y Regex):** Inicialmente, nuestra tarea de Ansible usaba una expresión regular muy genérica (^bind .*) para encontrar la línea a cambiar. Esto provocó que, si se ejecutaba varias veces, no reemplazara la línea restrictiva original, sino que añadiera líneas nuevas al final, creando una configuración conflictiva. Aprendimos a usar expresiones regulares (Regex) específicas para ser quirúrgicos en nuestros cambios.
 
-Fragmento de Código (Role redis_server):
+**Fragmento de Código (Role redis_server):**
 
 ```YAML
 
@@ -393,12 +393,12 @@ Fragmento de Código (Role redis_server):
   notify: Reiniciar Redis
 ```
 
-Paso 2: Configurar la Conexión de Vault a Redis
-El Desafío: Vault necesita "permiso root" en Redis para poder crear y borrar usuarios. Necesitamos decirle a Vault dónde está Redis y qué contraseña maestra usar.
+### Paso 2: Configurar la Conexión de Vault a Redis
+**El Desafío:** Vault necesita "permiso root" en Redis para poder crear y borrar usuarios. Necesitamos decirle a Vault dónde está Redis y qué contraseña maestra usar.
 
-Lección Aprendida (Plugins de Base de Datos): Intentamos inicialmente usar una cadena de conexión tipo URL (redis://:password@host:port), que es común en muchos sistemas. Sin embargo, descubrimos mediante pruebas que el plugin específico de Redis para Vault no maneja bien este formato. La solución robusta fue "deconstruir" la configuración y pasar cada parámetro (host, port, password) como un campo individual en el JSON que enviamos a la API de Vault.
+**Lección Aprendida (Plugins de Base de Datos):** Intentamos inicialmente usar una cadena de conexión tipo URL (`redis://:password@host:port`), que es común en muchos sistemas. Sin embargo, descubrimos mediante pruebas que el plugin específico de Redis para Vault no maneja bien este formato. La solución robusta fue "deconstruir" la configuración y pasar cada parámetro (host, port, password) como un campo individual en el JSON que enviamos a la API de Vault.
 
-Fragmento de Código (Playbook vault-config.yml):
+**Fragmento de Código (Playbook vault-config.yml):**
 
 ```YAML
 
@@ -433,18 +433,18 @@ Fragmento de Código (Playbook vault-config.yml):
 
 ```
 
-Paso 3: Definir el Rol Dinámico (La receta para crear usuarios)
+### Paso 3: Definir el Rol Dinámico (La receta para crear usuarios)
 El Desafío: Un "rol" en Vault es una plantilla. Le dice a Vault: "Cuando alguien te pida credenciales bajo el nombre 'redis-runner-role', ejecuta ESTE comando SQL (o ACL en el caso de Redis) para crear el usuario temporal".
 
-Lección Aprendida (Conflicto de Variables Jinja2 vs. Vault): El comando para crear un usuario en Redis 6+ es: ACL SETUSER <nombre_usuario> on ><contraseña> +@all ~*.
+**Lección Aprendida (Conflicto de Variables Jinja2 vs. Vault):** El comando para crear un usuario en Redis 6+ es: `ACL SETUSER <nombre_usuario> on ><contraseña> +@all ~*`.
 
-Vault utiliza sus propias variables internas, {{name}} y {{password}}, que sustituirá dinámicamente al momento de crear el usuario.
+Vault utiliza sus propias variables internas, `{{name}}` y `{{password}}`, que sustituirá dinámicamente al momento de crear el usuario.
 
-El problema es que Ansible también usa {{...}} para sus variables (Jinja2). Cuando Ansible leía la tarea, intentaba reemplazar {{name}} y fallaba porque esa variable no existe en Ansible.
+El problema es que Ansible también usa `{{...}}` para sus variables (Jinja2). Cuando Ansible leía la tarea, intentaba reemplazar `{{name}}` y fallaba porque esa variable no existe en Ansible.
 
-La solución es usar la directiva !unsafe de YAML. Esto le dice a Ansible: "Trata esta cadena como texto literal, no intentes interpretar lo que hay dentro de las llaves. Pásalo crudo a Vault".
+La solución es usar la directiva `!unsafe` de YAML. Esto le dice a Ansible: "Trata esta cadena como texto literal, no intentes interpretar lo que hay dentro de las llaves. Pásalo crudo a Vault".
 
-Fragmento de Código (Playbook vault-config.yml):
+**Fragmento de Código (Playbook vault-config.yml):**
 
 ```YAML
 

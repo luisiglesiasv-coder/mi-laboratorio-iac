@@ -1,0 +1,8 @@
+---
+# Handlers for the postgres_server role
+# Documentation: Triggered by 'notify' statements in tasks.
+
+- name: Restart PostgreSQL service
+  ansible.builtin.service:
+    name: postgresql
+    state: restarted

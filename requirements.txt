@@ -16,3 +16,5 @@ PyYAML             # Para trabajar con inventarios y configuraciones YAML/JSON
 psycopg2-binary    # Conexión real a PostgreSQL (más robusto)
 redis              # Conexión a Redis
 hvac               # Cliente Python para la API de HashiCorp Vault
+molecule
+molecule-plugins[docker]

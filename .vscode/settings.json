@@ -1,3 +1,4 @@
 {
-    "jinja2-html-enhancer.toggleVariableCheck": true
+    "jinja2-html-enhancer.toggleVariableCheck": true,
+    "ansible.python.interpreterPath": "/Users/luis/mi-laboratorio-iac/venv/bin/python"
 }
