@@ -1,0 +1,11 @@
+storage "file" {
+  path = "{{ vault_data_path }}"
+}
+
+listener "tcp" {
+  address     = "{{ vault_listener_address }}"
+  tls_disable = 1
+}
+
+ui = true
+disable_mlock = true

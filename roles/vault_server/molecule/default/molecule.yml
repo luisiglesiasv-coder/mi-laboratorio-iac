@@ -1,0 +1,34 @@
+---
+# Molecule configuration for vault_server
+# Optimized for macOS (Docker Desktop) and Vault mlock capabilities
+dependency:
+  name: galaxy
+  enabled: false # avoid SSL error in Mac
+driver:
+  name: docker
+
+platforms:
+  - name: vault-instance
+    # Use an image with systemd pre-installed
+    image: geerlingguy/docker-ubuntu2204-ansible:latest
+    # Privileged is mandatory to run systemd and manage capabilities
+    privileged: true
+    command: /sbin/init
+    capabilities:
+      - IPC_LOCK
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+
+provisioner:
+  name: ansible
+  env:
+    # Use our portable roles path
+    ANSIBLE_ROLES_PATH: ../../../
+  config_options:
+    defaults:
+      host_key_checking: false
+      interpreter_python: auto_silent
+
+verifier:
+  name: ansible

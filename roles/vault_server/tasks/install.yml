@@ -1,0 +1,64 @@
+---
+# Installation logic for Vault Binary
+
+- name: 1.1 Install system dependencies
+  ansible.builtin.apt:
+    name: 
+      - unzip
+      - libcap2-bin
+    state: present
+    update_cache: yes
+
+- name: 1.2 Create Vault group
+  ansible.builtin.group:
+    name: vault
+    state: present
+
+- name: 1.3 Create Vault system user
+  ansible.builtin.user:
+    name: vault
+    group: vault
+    system: yes
+    shell: /bin/false
+    create_home: no
+
+- name: 1.4 Download Vault binary
+  ansible.builtin.get_url:
+    url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "/tmp/vault.zip"
+    mode: '0644'
+
+- name: 1.5 Unarchive Vault binary to install path
+  ansible.builtin.unarchive:
+    src: "/tmp/vault.zip"
+    dest: "{{ vault_install_path }}"
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: 1.6 Give Vault binary cap_ipc_lock capability
+  # Allows Vault to lock memory without root privileges
+  community.general.capabilities:
+    path: "{{ vault_install_path }}/vault"
+    capability: cap_ipc_lock+ep
+    state: present
+
+- name: 1.7 Create configuration and data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: vault
+    group: vault
+    mode: '0750'
+  loop:
+    - "{{ vault_config_path }}"
+    - "{{ vault_data_path }}"
+
+- name: 1.8 Template Vault configuration file (HCL)
+  ansible.builtin.template:
+    src: vault.hcl.j2
+    dest: "{{ vault_config_path }}/vault.hcl"
+    owner: vault
+    group: vault
+    mode: '0640'

@@ -1,0 +1,37 @@
+[Unit]
+Description="HashiCorp Vault - A tool for managing secrets"
+Documentation=https://www.vaultproject.io/docs/
+Requires=network-online.target
+After=network-online.target
+ConditionFileNotEmpty={{ vault_config_path }}/vault.hcl
+
+[Service]
+# Ejecución como usuario sin privilegios
+User=vault
+Group=vault
+
+# Comandos de inicio y recarga
+ExecStart={{ vault_install_path }}/vault server -config={{ vault_config_path }}/vault.hcl
+ExecReload=/bin/kill --signal HUP $MAINPID
+
+# Gestión de Memoria y Seguridad (IPC_LOCK)
+# Esto permite bloquear la memoria para que los secretos no vayan al swap
+Capabilities=CAP_IPC_LOCK+ep
+CapabilityBoundingSet=CAP_SYSLOG CAP_IPC_LOCK
+AmbientCapabilities=CAP_IPC_LOCK
+NoNewPrivileges=yes
+
+# Hardening del Proceso
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+
+# Estrategia de recuperación
+KillMode=process
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

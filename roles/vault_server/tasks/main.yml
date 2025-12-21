@@ -1,157 +1,21 @@
 ---
-# --- TAREA 0: AUTO-DESBLOQUEO Y HEALTH CHECK ---
-# Objetivo: Asegurar que Vault esté activo y desbloqueado (Unsealed) antes de la configuración.
+# Main tasks for the vault_server role
+# Orchestrates Installation, Service Management, and Modular Provisioning
 
-- name: 0.1 Verificar estado de Vault (Health Check)
-  ansible.builtin.uri:
-    url: "{{ vault_addr }}/v1/sys/health"
-    method: GET
-    # Códigos 200/429/503 (Abierto, Standby, Sellado) se consideran manejables
-    status_code: [200, 429, 503]
-  register: vault_health_status
+- name: "[PHASE 1] Install Vault Binary and System Requirements"
+  # This handles downloading, unarchiving, and setting Linux capabilities
+  ansible.builtin.import_tasks: install.yml
 
-- name: 0.2 Desbloquear Vault si está sellado (status 503)
-  ansible.builtin.uri:
-    url: "{{ vault_addr }}/v1/sys/unseal"
-    method: POST
-    body_format: json
-    body:
-      key: "{{ vault_unseal_key }}"
-  # Solo ejecuta si el estado de salud es 503 (Sellado)
-  when: vault_health_status.status == 503
-  register: unseal_result
+- name: "[PHASE 2] Configure Systemd Service and Runtime"
+  # This sets up the .service file and ensures Vault is 'active (running)'
+  ansible.builtin.import_tasks: service.yml
 
-# --- TAREA 1: CONFIGURAR MOTOR DE SECRETOS DE BASE DE DATOS ---
-# Objetivo: Habilitar el motor 'database/' y configurar conexiones (Postgres y Redis).
+- name: "End of PHASE 2 --> Force handlers to run now"
+  # This ensures any 'Restart Vault' notification happens BEFORE unsealing
+  ansible.builtin.meta: flush_handlers
 
-- name: 1.1 Obtener lista de motores de secretos activos para verificación
-  community.hashi_vault.vault_read:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: sys/mounts
-  register: vault_mounts
-
-- name: 1.2 Habilitar el motor de secretos dinamicos 'database/' (si no existe)
-  community.hashi_vault.vault_write:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: sys/mounts/database
-    data:
-      type: database
-      description: "Database secrets engine for PostgreSQL and Redis"
-  when: "'database/' not in vault_mounts.data"
-
-# --- CONFIGURACIÓN POSTGRESQL ---
-- name: 1.3 Configurar PostgreSQL
-  ansible.builtin.import_tasks: configure_postgres.yml
-
-# --- CONFIGURACIÓN REDIS (NUEVO) ---
-- name: 1.4 Importar configuración de Secretos Dinámicos de Redis
-  ansible.builtin.import_tasks: configure_redis.yml
-
-
-# --- TAREA 2: IMPLEMENTAR AUTENTICACIÓN APP ROLE ---
-# Objetivo: Crear la identidad que usará el Runner de CI/CD para autenticarse sin el Token Root.
-
-- name: 2.1 Crear la política 'runner-policy' (Lectura para Postgres Y Redis)
-  community.hashi_vault.vault_write:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: sys/policy/runner-policy
-    data:
-      policy: |
-        # Permiso para pedir credenciales de Postgres
-        path "database/creds/runner_role" {
-          capabilities = ["read"]
-        }
-        # Permiso para pedir credenciales de Redis (¡NUEVO!)
-        path "database/creds/redis-runner-role" {
-          capabilities = ["read"]
-        }
-        # Permiso para revocar sus propios tokens
-        path "sys/leases/revoke" {
-          capabilities = ["update"]
-        }
-
-# TAREA: Leemos qué métodos de auth están activos
-- name: 2.2.a Obtener lista de métodos de autenticación activos
-  community.hashi_vault.vault_read:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    # Esta es la ruta de la API para listar métodos de auth
-    path: sys/auth
-  register: vault_auth_methods
-
-# TAREA : Solo habilitamos si no está en la lista
-- name: 2.2.b Habilitar el método de autenticación AppRole (si no existe)
-  community.hashi_vault.vault_write:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: sys/auth/approle
-    data:
-      type: approle
-    # Verificamos si 'approle/' (con barra al final) ya existe en los datos
-  when: "'approle/' not in vault_auth_methods.data"
-
-- name: 2.3 Crear el AppRole 'ci-runner' y vincular la política
-  community.hashi_vault.vault_write:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: auth/approle/role/ci-runner
-    data:
-      policies: ["runner-policy"]
-      secret_id_ttl: "0"
-      token_ttl: "1h"
-      # Añadir esta línea para evitar la caducidad por uso único (0 = ilimitado)
-      secret_id_num_uses: 0
-
-# --- TAREA 3: OBTENER ROLE ID ---
-- name: 3.1 Obtener RoleID del AppRole 'ci-runner'
-  community.hashi_vault.vault_read:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: auth/approle/role/ci-runner/role-id
-  register: ci_runner_role_id
-  # Almacenamos el RoleID para usarlo después de forma persistente
-  run_once: true
-  delegate_to: localhost
-
-- name: 3.2 Generar y obtener SecretID del AppRole 'ci-runner'
-  community.hashi_vault.vault_write:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: auth/approle/role/ci-runner/secret-id
-  register: ci_runner_secret_id
-  # Almacenamos el SecretID para usarlo después de forma persistente
-  run_once: true
-  delegate_to: localhost
-
-
-# --- TAREA 4: EXPORTAR Y GUARDAR CREDENCIALES ---
-# 4.0 Aseguramos que el directorio 'files' de la raíz existe
-- name: 4.0 Asegurar que existe el directorio 'files' en la raíz
-  ansible.builtin.file:
-    # Usamos '..' para subir un nivel desde 'playbooks/' a la raíz
-    path: "{{ playbook_dir }}/../files"
-    state: directory
-    mode: '0755'
-  run_once: true
-  delegate_to: localhost
-
-# 4.1 Guardar RoleID en la raíz
-- name: 4.1 Guardar RoleID en un archivo local para uso en la CI
-  ansible.builtin.copy:
-    content: "{{ ci_runner_role_id.data.data.role_id }}"
-    # Ruta relativa al playbook: Subimos un nivel y entramos en 'files'
-    dest: "{{ playbook_dir }}/../files/ci_runner_role_id.txt"
-  run_once: true
-  delegate_to: localhost
-
-# 4.2 Guardar SecretID en la raíz
-- name: 4.2 Guardar SecretID en un archivo local (REQUIERE CIFRADO)
-  ansible.builtin.copy:
-    content: "{{ ci_runner_secret_id.data.data.secret_id }}"
-    # Ruta relativa al playbook: Subimos un nivel y entramos en 'files'
-    dest: "{{ playbook_dir }}/../files/ci_runner_secret_id.txt"
-  run_once: true
-  delegate_to: localhost
+- name: "[PHASE 3] Modular Provisioning of Engines and Roles"
+  # This phase configures the logic (Postgres, Redis, AppRoles)
+  # It only runs if the service is up and unsealed
+  ansible.builtin.import_tasks: provision.yml
+  when: vault_run_provisioning | default(true)

@@ -1,0 +1,62 @@
+---
+# roles/vault_server/tasks/provision.yml
+# Phase 3: Bootstrap - Initializing, Unsealing, and Modular Provisioning
+
+# --- 1. INITIALIZATION & BOOTSTRAP ---
+
+- name: 3.1 Check if Vault is already initialized
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/sys/init"
+    method: GET
+  register: vault_init_check
+
+- name: 3.2 Initialize Vault if new
+  # Using raw string for JSON body to ensure Integer types for Go backend
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/sys/init"
+    method: PUT
+    body_format: json
+    body: "{ 'secret_shares': {{ vault_init_shares | int }}, 'secret_threshold': {{ vault_init_threshold | int }} }"
+  register: vault_init_results
+  changed_when: vault_init_results.status == 200
+  when: not vault_init_check.json.initialized
+
+- name: 3.3 Ensure local files directory exists on host (Mac)
+  ansible.builtin.file:
+    path: "{{ vault_unseal_keys_dir }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  run_once: true
+  become: false # Run as local user
+
+- name: 3.4 Save Vault credentials to local JSON file
+  ansible.builtin.copy:
+    content: "{{ vault_init_results.json | to_nice_json }}"
+    dest: "{{ vault_unseal_keys_dir }}/vault_init_output.json"
+    mode: '0644'
+  delegate_to: localhost
+  when: vault_init_results.changed
+  become: false # Run as local user
+
+- name: 3.5 Load credentials from local file
+  ansible.builtin.set_fact:
+    vault_creds: "{{ lookup('file', vault_unseal_keys_dir + '/vault_init_output.json') | from_json }}"
+
+- name: 3.6 Unseal Vault using stored keys
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/sys/unseal"
+    method: PUT
+    body_format: json
+    body:
+      key: "{{ item }}"
+  loop: "{{ vault_creds['keys'] }}"
+  # Only run if Vault is actually initialized AND sealed
+  when: vault_init_check.json.initialized
+
+# --- 2. MODULAR ENGINE PROVISIONING ---
+
+- name: 3.7 Load modular secret engines
+  # Dynamically includes task files from the 'engines' subdirectory
+  ansible.builtin.include_tasks: "engines/{{ item }}.yml"
+  loop: "{{ enabled_vault_engines | default([]) }}"

@@ -1,0 +1,23 @@
+---
+# --- Installation Parameters (Infrastructure) ---
+# Version of Vault to download from HashiCorp releases
+vault_version: "1.15.4"
+# System paths for binary and configuration
+vault_install_path: "/usr/local/bin"
+vault_config_path: "/etc/vault.d"
+# Directory where Vault will store its encrypted data
+vault_data_path: "/opt/vault/data"
+
+# --- Network Configuration ---
+# BIND ADDRESS: Where the Vault SERVICE listens (0.0.0.0 allows external access)
+vault_listener_address: "0.0.0.0:8200"
+# API URL: Where the CLIENT (Ansible/CLI) connects (explicitly using HTTP for lab)
+vault_addr: "http://127.0.0.1:8200"
+
+# --- Initialization & Unseal Parameters (Provisioning) ---
+# Local directory on the host (Mac) to store the generated Unseal Keys and Root Token
+# We go up two levels from the role (vault_server -> roles -> root)
+vault_unseal_keys_dir: "{{ role_path }}/../../files"
+# Shamir's Secret Sharing configuration (Simplified for Lab environment)
+vault_init_shares: 1
+vault_init_threshold: 1

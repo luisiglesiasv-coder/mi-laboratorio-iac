@@ -1,0 +1,21 @@
+---
+# Service management for Vault
+
+- name: 2.1 Create Systemd service unit
+  ansible.builtin.template:
+    src: vault.service.j2
+    dest: /etc/systemd/system/vault.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart Vault
+
+- name: 2.2 Force systemd to reload configs
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: 2.3 Ensure Vault is started and enabled
+  ansible.builtin.service:
+    name: vault
+    state: started
+    enabled: yes

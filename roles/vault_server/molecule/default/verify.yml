@@ -1,0 +1,67 @@
+---
+# roles/vault_server/molecule/default/verify.yml
+# Automated Acceptance Tests for Vault Server
+
+- name: Verify Vault Server Infrastructure
+  hosts: all
+  gather_facts: true
+  
+  tasks:
+    - name: 0.1 Load shared test variables
+      # We load the same vars used in converge to keep it DRY
+      ansible.builtin.include_vars:
+        file: group_vars/all.yml
+
+    # --- 1. SERVICE VALIDATION ---
+    - name: 1.1 Populate service facts
+      ansible.builtin.service_facts:
+
+    - name: 1.2 Assert Vault service is running and enabled
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.services['vault.service'].state == 'running'
+          - ansible_facts.services['vault.service'].status == 'enabled'
+        fail_msg: "Vault service is not healthy or not enabled"
+
+    # --- 2. BINARY & CAPABILITIES VALIDATION ---
+    - name: 2.1 Check Vault binary version
+      ansible.builtin.command: vault version
+      register: vault_version_output
+      changed_when: false
+
+    - name: 2.2 Assert Vault version is correct
+      ansible.builtin.assert:
+        that:
+          - "'1.15.4' in vault_version_output.stdout"
+        fail_msg: "Vault version mismatch"
+
+    # --- 3. API & SEAL STATUS VALIDATION ---
+    - name: 3.1 Query Vault health via API
+      ansible.builtin.uri:
+        url: "{{ vault_addr }}/v1/sys/health"
+        method: GET
+        # Vault returns 200 if unsealed, 503 if sealed, 501 if uninitialized
+        status_code: [200, 503, 501]
+      register: vault_health
+
+    - name: 3.2 Assert Vault is initialized and unsealed
+      ansible.builtin.assert:
+        that:
+          - vault_health.json.initialized == true
+          - vault_health.json.sealed == false
+        fail_msg: >
+          Vault is not in the expected state. 
+          Current status -> Initialized: {{ vault_health.json.initialized }}, 
+          Sealed: {{ vault_health.json.sealed }}
+
+    # --- 4. CONFIGURATION VALIDATION ---
+    - name: 4.1 Check if vault.hcl exists and is not empty
+      ansible.builtin.stat:
+        path: /etc/vault.d/vault.hcl
+      register: hcl_file
+
+    - name: 4.2 Assert config file is valid
+      ansible.builtin.assert:
+        that:
+          - hcl_file.stat.exists
+          - hcl_file.stat.size > 0
