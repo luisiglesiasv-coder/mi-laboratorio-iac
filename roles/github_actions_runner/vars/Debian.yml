@@ -1,0 +1,5 @@
+---
+runner_os: "linux"
+runner_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'x64' }}"
+package_manager_command: "apt"
+service_type: "systemd"

@@ -1,0 +1,36 @@
+---
+# roles/github_actions_runner/tasks/install.yml
+
+- name: 2.1 Ensure runner directory exists
+  ansible.builtin.file:
+    path: "{{ github_runner_dir }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ github_runner_user | default(ansible_user_id) }}"
+
+- name: 2.2 Download and Extract Runner
+  ansible.builtin.unarchive:
+    src: "https://github.com/actions/runner/releases/download/v{{ github_runner_version }}/actions-runner-{{ runner_os }}-{{ runner_arch }}-{{ github_runner_version }}.tar.gz"
+    dest: "{{ github_runner_dir }}"
+    remote_src: yes
+    validate_certs: no
+    # Evita descargar si el binario de configuración ya existe
+    creates: "{{ github_runner_dir }}/config.sh"
+
+- name: 2.3 Check if runner is already configured
+  ansible.builtin.stat:
+    path: "{{ github_runner_dir }}/.runner"
+  register: runner_config
+
+- name: 2.4 Register Runner with GitHub
+  ansible.builtin.command:
+    cmd: >
+      ./config.sh --url {{ github_repo_url }}
+      --token {{ github_runner_token }}
+      --name {{ ansible_hostname }}-runner
+      --unattended --replace
+  args:
+    chdir: "{{ github_runner_dir }}"
+  # Solo registra si el archivo .runner no existe
+  when: not runner_config.stat.exists
+  no_log: true

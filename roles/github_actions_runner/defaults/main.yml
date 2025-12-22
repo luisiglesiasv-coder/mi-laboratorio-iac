@@ -1,0 +1,8 @@
+---
+# roles/github_actions_runner/defaults/main.yml
+github_runner_version: "2.329.0"
+github_runner_user: "{{ ansible_user_id }}"
+github_runner_dir: "{{ ansible_env.HOME }}/actions-runner"
+github_repo_url: "https://github.com/luisiglesiasv-coder/mi-laboratorio-iac"
+# This will be passed at runtime for security
+github_runner_token: ""

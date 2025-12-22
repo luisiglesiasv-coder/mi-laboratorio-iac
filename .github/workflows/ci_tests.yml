@@ -2,13 +2,17 @@
 
 name: Ejecutar Pruebas de Infraestructura (CI)
 
-on:
-  push:
-    branches: [ main ] 
+# on:
+#   push:
+#     branches: [ main ] 
+
+# Añadimos esto si quieres lanzarlo a mano en el futuro (opcional)
+on: workflow_dispatch
+
 
 jobs:
   bdd_tests: 
-    runs-on: self-hosted 
+    runs-on: [self-hosted, Linux]
     
     # Definimos las variables de entorno de Vault y los secretos de AppRole
     env:

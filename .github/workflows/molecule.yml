@@ -1,0 +1,32 @@
+name: Molecule Infrastructure Testing
+on: 
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  molecule-test:
+    # 'macOS' es la etiqueta que vemos en tu captura de pantalla
+    runs-on: [self-hosted, macOS]
+    
+    steps:
+      - name: 1. Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 2. Prepare Python Environment
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 3. Install Ansible Dependencies
+        run: |
+          ansible-galaxy collection install -r requirements.yml -p ./collections_external
+
+      - name: 4. Run Molecule (Vault Role)
+        run: |
+          cd roles/vault_server
+          molecule test -s default
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'

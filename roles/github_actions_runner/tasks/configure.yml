@@ -1,0 +1,20 @@
+---
+# roles/github_actions_runner/tasks/configure.yml
+
+- name: 4.1 Check if runner is already configured
+  ansible.builtin.stat:
+    path: "{{ github_runner_dir }}/.runner"
+  register: runner_config
+
+- name: 4.2 Register the runner with GitHub
+  ansible.builtin.command:
+    cmd: >
+      ./config.sh --url {{ github_repo_url }}
+      --token {{ github_runner_token }}
+      --name {{ ansible_hostname }}-runner
+      --labels {{ github_runner_labels }}
+      --unattended --replace
+  args:
+    chdir: "{{ github_runner_dir }}"
+  when: not runner_config.stat.exists
+  no_log: true

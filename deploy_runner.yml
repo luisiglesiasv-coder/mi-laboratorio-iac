@@ -1,0 +1,14 @@
+---
+- name: Deploy GitHub Actions Runner
+  hosts: localhost
+  connection: local
+  roles:
+    - role: github_actions_runner
+      vars:
+        # Data from your GitHub screenshot
+        github_repo_url: "https://github.com/luisiglesiasv-coder/mi-laboratorio-iac"
+        github_runner_token: "BYJZ26MSYGBYMV4TSC6UIHDJJGQI2"
+        # Lab configuration
+        github_runner_labels: "mac,molecule,vault"
+        github_runner_dir: "{{ ansible_env.HOME }}/actions-runner"
+        github_runner_version: "2.330.0" # Updated to match your screenshot

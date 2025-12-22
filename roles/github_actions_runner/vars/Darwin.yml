@@ -1,0 +1,5 @@
+---
+runner_os: "osx"
+runner_arch: "{{ 'arm64' if ansible_architecture == 'arm64' else 'x64' }}"
+package_manager_command: "brew"
+service_type: "launchd"

@@ -1,0 +1,17 @@
+---
+# roles/github_actions_runner/tasks/dependencies.yml
+
+- name: 1.1 Install Linux dependencies (Ubuntu)
+  ansible.builtin.apt:
+    name: [python3-pip, git, curl, libpq-dev, python3-venv]
+    state: present
+    update_cache: yes
+  become: yes
+  when: ansible_os_family == "Debian"
+
+- name: 1.2 Install Mac dependencies (Darwin)
+  community.general.homebrew:
+    name: [python3, git, curl, libpq, gnu-tar]
+    state: present
+    update_homebrew: no  # <--- Esto evita que se quede "colgado" actualizando
+  when: ansible_os_family == "Darwin"

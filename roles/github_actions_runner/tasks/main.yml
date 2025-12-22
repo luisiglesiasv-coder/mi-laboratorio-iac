@@ -1,0 +1,20 @@
+---
+# roles/github_actions_runner/tasks/main.yml
+
+- name: 0.1 Detect OS-Specific variables
+  ansible.builtin.include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_os_family }}.yml"
+    - "default.yml"
+
+- name: 0.2 Install dependencies
+  ansible.builtin.include_tasks: dependencies.yml
+
+- name: 0.3 Setup Runner directory and download
+  ansible.builtin.include_tasks: install.yml
+
+- name: 0.4 Register and configure Runner
+  ansible.builtin.include_tasks: configure.yml
+
+- name: 0.5 Ensure Runner service is active
+  ansible.builtin.include_tasks: service.yml

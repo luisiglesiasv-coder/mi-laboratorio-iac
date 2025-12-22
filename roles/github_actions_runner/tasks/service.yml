@@ -1,0 +1,23 @@
+---
+# roles/github_actions_runner/tasks/service.yml
+
+- name: 5.1 Check if runner service is installed
+  ansible.builtin.stat:
+    path: "{{ github_runner_dir }}/.service"
+  register: runner_service_installed
+
+- name: 5.2 Install the runner as a service
+  ansible.builtin.command:
+    cmd: "./svc.sh install"
+  args:
+    chdir: "{{ github_runner_dir }}"
+  when: not runner_service_installed.stat.exists
+  become: "{{ true if ansible_os_family == 'Debian' else false }}"
+
+- name: 5.3 Start the runner service
+  ansible.builtin.command:
+    cmd: "./svc.sh start"
+  args:
+    chdir: "{{ github_runner_dir }}"
+  register: runner_start
+  changed_when: "'already running' not in runner_start.stdout"
