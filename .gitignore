@@ -1,25 +1,44 @@
-# Python
+# --- PYTHON & ENVIRONMENT ---
+venv/
 __pycache__/
 *.py[cod]
 *$py.class
-venv/
 .env
+.pytest_cache/
 
-# Ansible & Molecule
-.molecule/
-molecule/*/roles/
-molecule/*/.molecule/
-molecule/*/instance_config.yml
-molecule/*/state.yml
-*.log
+# --- ANSIBLE & COLLECTIONS (DETOX) ---
+# Ignore downloaded collections to keep the repo light
+collections/
+collections_external/
 .ansible/
+*.retry
 
-# OS specific
+# --- MOLECULE EPHEMERAL DATA ---
+# Ignore temporary state and config for all roles
+.molecule/
+roles/**/molecule/*/instance_config.yml
+roles/**/molecule/*/state.yml
+roles/**/molecule/*/.molecule/
+roles/**/molecule/*/roles/
+
+# --- PROJECT SECRETS & SENSITIVE DATA (CRITICAL) ---
+# Prevent uploading Vault initialization keys and tokens
+roles/vault_server/files/*.json
+# Ignore sensitive txt files in any files directory
+**/files/*.txt
+# Specific secrets mentioned in previous steps
+files/ci_runner_role_id.txt
+files/ci_runner_secret_id.txt
+files/redis_master_password.txt
+
+# --- LOGS & DIAGNOSTICS ---
+*.log
+*.out
+__ci_tests.sh.out
+
+# --- OS & IDE SPECIFIC ---
 .DS_Store
 .idea/
 .vscode/
-
-# Project specific
-# We ignore the files folder to prevent uploading passwords to GitHub
-# Once we have Vault, we will manage this differently
-files/*.txt
+*.swp
+*.swo
