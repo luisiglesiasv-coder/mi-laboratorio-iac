@@ -1,0 +1,36 @@
+---
+# roles/vault_server/defaults/main.yml
+
+# --- 1. Binary Installation ---
+vault_version: "1.15.4"
+vault_install_path: "/usr/local/bin"
+vault_config_path: "/etc/vault.d"
+vault_data_path: "/opt/vault/data"
+
+# --- 2. OS Identity ---
+vault_user: "vault"
+vault_group: "vault"
+
+# --- 3. Network & Listener Configuration ---
+vault_port: 8200
+vault_listener_address: "0.0.0.0:{{ vault_port }}"
+vault_addr: "http://127.0.0.1:{{ vault_port }}"
+
+# --- 4. Vault Engine Behavior ---
+vault_ui: true
+vault_disable_mlock: true # This avoids the setcap requirement in Docker
+vault_log_level: "info"
+
+# --- 5. Initialization & Unsealing (Bootstrap) ---
+vault_init_shares: 1
+vault_init_threshold: 1
+vault_init_output_file: "/tmp/vault_init.json"
+
+# --- 6. Local Storage for Mac (Credential Persistence) ---
+# Points to the 'files' directory inside the current role
+vault_unseal_keys_dir: "{{ role_path }}/files"
+vault_unseal_keys_file_name: "vault_init_output.json"
+
+# --- 7. Modular Engine Toggle ---
+# Default to empty so the 'default' scenario doesn't try to load engines
+enabled_vault_engines: []

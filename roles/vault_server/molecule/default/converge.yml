@@ -1,17 +1,7 @@
 ---
-# Playbook to apply the vault_server role in the Molecule environment
-- name: Converge Vault Server
+- name: Converge Vault (Unit Test)
   hosts: all
-  become: true
-  gather_facts: true
-
-  # Variables de control para el test de infraestructura
-  vars:
-    # Por ahora desactivamos el aprovisionamiento hasta que 
-    # verifiquemos que el binario y el servicio funcionan.
-    vault_run_provisioning: true
-
   tasks:
-    - name: "Include vault_server"
+    - name: "Include vault_server role"
       ansible.builtin.include_role:
         name: "vault_server"

@@ -1,0 +1,25 @@
+---
+# roles/vault_server/molecule/_shared/cleanup.yml
+# Centralized cleanup: Removes local sensitive data from the host machine
+
+- name: Cleanup Local Credentials
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # Anchor to the role's files directory relative to this playbook
+    # cleanup.yml is in molecule/_shared/, so we go up 2 levels
+    local_files_dir: "{{ playbook_dir }}/../../files"
+    credentials_file: "vault_init_output.json"
+
+  tasks:
+    - name: 1.1 Remove the Vault credentials file from Mac
+      # We use the calculated path to ensure portability
+      ansible.builtin.file:
+        path: "{{ local_files_dir }}/{{ credentials_file }}"
+        state: absent
+      register: remove_result
+
+    - name: 1.2 Report cleanup status
+      ansible.builtin.debug:
+        msg: "Cleanup successful: {{ local_files_dir }}/{{ credentials_file }} removed."
+      when: remove_result.changed

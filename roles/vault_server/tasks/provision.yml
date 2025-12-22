@@ -51,8 +51,9 @@
     body:
       key: "{{ item }}"
   loop: "{{ vault_creds['keys'] }}"
-  # Only run if Vault is actually initialized AND sealed
-  when: vault_init_check.json.initialized
+  # FIX: Run if it was JUST initialized (Task 3.2 changed) 
+  # OR if it was already initialized previously (Task 3.1)
+  when: vault_init_results.changed or vault_init_check.json.initialized
 
 # --- 2. MODULAR ENGINE PROVISIONING ---
 

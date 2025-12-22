@@ -1,0 +1,52 @@
+---
+# roles/vault_server/tasks/engines/postgresql.yml
+
+- name: PSQL-1.1 Get current mounts from Vault
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/sys/mounts"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ vault_creds['root_token'] }}"
+  register: vault_mounts
+
+- name: PSQL-1.2 Enable Database engine at 'database/' path
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/sys/mounts/database"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_creds['root_token'] }}"
+    body_format: json
+    body:
+      type: "database"
+      description: "Dynamic credentials for SQL databases"
+    status_code: [200, 204]
+  when: "'database/' not in vault_mounts.json"
+
+- name: PSQL-2.1 Configure PostgreSQL connection
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/database/config/postgresql"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_creds['root_token'] }}"
+    body_format: json
+    body:
+      plugin_name: "postgresql-database-plugin"
+      allowed_roles: "readonly-role"
+      connection_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ db_host }}:{{ db_port }}/{{ db_name }}?sslmode=disable"
+    status_code: [200, 204]
+
+- name: PSQL-3.1 Create a Dynamic Role (Read-Only)
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/database/roles/readonly-role"
+    method: POST
+    headers:
+      X-Vault-Token: "{{ vault_creds['root_token'] }}"
+    body_format: json
+    body:
+      db_name: "postgresql"
+      creation_statements: 
+        - "CREATE ROLE \"{{ '{{' }}name{{ '}}' }}\" WITH LOGIN PASSWORD '{{ '{{' }}password{{ '}}' }}' VALID UNTIL '{{ '{{' }}expiration{{ '}}' }}';"
+        - "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{ '{{' }}name{{ '}}' }}\";"
+      default_ttl: "1h"
+      max_ttl: "24h"
+    status_code: [200, 204]

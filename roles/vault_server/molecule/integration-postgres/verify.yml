@@ -1,0 +1,52 @@
+---
+# roles/vault_server/molecule/integration-postgres/verify.yml
+# Integration Test: Validating the Vault + PostgreSQL Dynamic Secrets handshake
+
+- name: Verify PostgreSQL Dynamic Secrets Integration
+  hosts: vault-instance  # Targeted specifically, Postgres doesn't have Vault APIs
+  gather_facts: false
+  vars:
+    vault_addr: "http://127.0.0.1:8200"
+    # Path relative to molecule/integration-postgres/
+    creds_file: "{{ playbook_dir }}/../../files/vault_init_output.json"
+
+  tasks:
+    # --- 0. PREPARATION ---
+    - name: 0.1 Load credentials from local file
+      # We fetch the Root Token to authenticate the following API calls
+      set_fact:
+        vault_creds: "{{ lookup('file', creds_file) | from_json }}"
+
+    # --- 1. ENGINE VALIDATION ---
+    - name: 1.1 Check if Database Secret Engine is mounted
+      ansible.builtin.uri:
+        url: "{{ vault_addr }}/v1/sys/mounts"
+        method: GET
+        headers:
+          X-Vault-Token: "{{ vault_creds['root_token'] }}"
+      register: vault_mounts
+      failed_when: "'database/' not in vault_mounts.json"
+
+    # --- 2. DYNAMIC CREDENTIALS VALIDATION ---
+    - name: 2.1 Request a dynamic PostgreSQL credential
+      # This mimics a real application requesting access to the DB
+      ansible.builtin.uri:
+        url: "{{ vault_addr }}/v1/database/creds/readonly-role"
+        method: GET
+        headers:
+          X-Vault-Token: "{{ vault_creds['root_token'] }}"
+      register: db_secret
+
+    - name: 2.2 Assert that credentials were generated correctly
+      # We verify that we got a username, a password, and a lease ID
+      ansible.builtin.assert:
+        that:
+          - db_secret.json.data.username is defined
+          - db_secret.json.data.password is defined
+          - db_secret.json.lease_id is search("database/creds/readonly-role")
+        fail_msg: "Vault failed to produce a valid dynamic secret for PostgreSQL"
+
+    # --- 3. FINAL REPORT ---
+    - name: 3.1 Report dynamic secret success
+      ansible.builtin.debug:
+        msg: "Success! Vault generated dynamic user: {{ db_secret.json.data.username }}"

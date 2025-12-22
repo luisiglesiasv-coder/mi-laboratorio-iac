@@ -1,0 +1,14 @@
+---
+# molecule/integration-postgres/group_vars/all.yml
+
+# --- 1. MODULAR ENGINE TRIGGER ---
+# This is what makes the integration scenario different from 'default'
+enabled_vault_engines:
+  - "postgresql"
+
+# --- 2. DATABASE CONNECTION DETAILS ---
+db_host: "postgres-instance"
+db_port: 5432
+db_user: "vault_admin"
+db_password: "admin_password"
+db_name: "my_app_db"

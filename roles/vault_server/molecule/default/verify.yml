@@ -1,16 +1,23 @@
 ---
 # roles/vault_server/molecule/default/verify.yml
-# Automated Acceptance Tests for Vault Server
+# Unit Tests: Infrastructure and Service Validation (Single Node)
 
 - name: Verify Vault Server Infrastructure
-  hosts: all
+  hosts: all  # In the default scenario, this is just your single vault container
   gather_facts: true
   
   tasks:
-    - name: 0.1 Load shared test variables
-      # We load the same vars used in converge to keep it DRY
+    # --- 0. PREPARATION ---
+    - name: 0.1 Load role defaults
+      # We explicitly load the role defaults so verify knows the ports and paths
+      # Path is relative to the molecule/default/ directory
+      ansible.builtin.include_vars:
+        file: ../../defaults/main.yml
+
+    - name: 0.2 Load scenario variables (if any)
       ansible.builtin.include_vars:
         file: group_vars/all.yml
+      ignore_errors: true # It's okay if this file is empty now
 
     # --- 1. SERVICE VALIDATION ---
     - name: 1.1 Populate service facts
@@ -21,9 +28,9 @@
         that:
           - ansible_facts.services['vault.service'].state == 'running'
           - ansible_facts.services['vault.service'].status == 'enabled'
-        fail_msg: "Vault service is not healthy or not enabled"
+        fail_msg: "Vault service is NOT healthy or NOT enabled at OS level"
 
-    # --- 2. BINARY & CAPABILITIES VALIDATION ---
+    # --- 2. BINARY VALIDATION ---
     - name: 2.1 Check Vault binary version
       ansible.builtin.command: vault version
       register: vault_version_output
@@ -33,35 +40,35 @@
       ansible.builtin.assert:
         that:
           - "'1.15.4' in vault_version_output.stdout"
-        fail_msg: "Vault version mismatch"
+        fail_msg: "The installed Vault version does not match the expected 1.15.4"
 
     # --- 3. API & SEAL STATUS VALIDATION ---
     - name: 3.1 Query Vault health via API
+      # Using the URI module to verify Vault is actually listening
       ansible.builtin.uri:
         url: "{{ vault_addr }}/v1/sys/health"
         method: GET
-        # Vault returns 200 if unsealed, 503 if sealed, 501 if uninitialized
+        # 200: Unsealed, 503: Sealed, 501: Uninitialized
         status_code: [200, 503, 501]
       register: vault_health
 
     - name: 3.2 Assert Vault is initialized and unsealed
+      # This confirms that our 'converge' did its job correctly
       ansible.builtin.assert:
         that:
           - vault_health.json.initialized == true
           - vault_health.json.sealed == false
-        fail_msg: >
-          Vault is not in the expected state. 
-          Current status -> Initialized: {{ vault_health.json.initialized }}, 
-          Sealed: {{ vault_health.json.sealed }}
+        fail_msg: "Vault is sealed or uninitialized. API Status: {{ vault_health.status }}"
 
     # --- 4. CONFIGURATION VALIDATION ---
-    - name: 4.1 Check if vault.hcl exists and is not empty
+    - name: 4.1 Check if Vault configuration file exists
       ansible.builtin.stat:
         path: /etc/vault.d/vault.hcl
       register: hcl_file
 
-    - name: 4.2 Assert config file is valid
+    - name: 4.2 Assert HCL config file is present and not empty
       ansible.builtin.assert:
         that:
           - hcl_file.stat.exists
           - hcl_file.stat.size > 0
+        fail_msg: "Vault configuration file is missing or empty"

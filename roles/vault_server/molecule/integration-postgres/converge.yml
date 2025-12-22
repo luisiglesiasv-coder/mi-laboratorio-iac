@@ -1,0 +1,23 @@
+---
+# roles/vault_server/molecule/integration-postgres/converge.yml
+# Orchestration: Deploy Vault and configure connection to the Postgres service
+
+- name: Converge Vault with PostgreSQL Integration
+  # We only target the vault-instance. Postgres is a black-box service.
+  hosts: vault-instance
+  gather_facts: true
+  
+  tasks:
+    - name: "C1. Wait for PostgreSQL service to be network-ready"
+      # This ensures Postgres is listening on 5432 before Vault tries to connect.
+      # 'db_host' and 'db_port' come from group_vars/all.yml
+      ansible.builtin.wait_for:
+        host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        timeout: 60
+        msg: "PostgreSQL did not start in time"
+
+    - name: "C2. Execute Vault Server role"
+      # This installs Vault, Unseals it, and configures the PG engine
+      ansible.builtin.include_role:
+        name: "vault_server"

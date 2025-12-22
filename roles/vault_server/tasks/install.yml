@@ -38,11 +38,13 @@
     mode: '0755'
 
 - name: 1.6 Give Vault binary cap_ipc_lock capability
-  # Allows Vault to lock memory without root privileges
   community.general.capabilities:
     path: "{{ vault_install_path }}/vault"
     capability: cap_ipc_lock+ep
     state: present
+  # FIX: Only run this if mlock is NOT disabled. 
+  # In Docker, where we disable mlock, this task is skipped, ensuring idempotency.
+  when: not vault_disable_mlock | bool
 
 - name: 1.7 Create configuration and data directories
   ansible.builtin.file:
