@@ -26,5 +26,12 @@ provisioner:
     defaults:
       host_key_checking: false
       interpreter_python: auto_silent
+# Replace the default verifier with pytest for better BDD support
+# verifier:
+#  name: ansible
 verifier:
-  name: ansible
+  name: testinfra
+  options:
+    v: true
+    # This ensures that BDD results look good in the terminal.
+    tb: native
