@@ -29,7 +29,11 @@
     mode: '0644'
     # This is the key: if the file exists. Ansible will skip this task
     # and won't try to connect to the network, avoiding idempotency failures.
-    when: not vault_zip_file.stat.exists
+  register: download_result
+  until: download_result is succeeded
+  retries: 3
+  delay: 5
+  when: not vault_zip_file.stat.exists
 
 - name: 1.5 Unarchive Vault binary to install path
   ansible.builtin.unarchive:
