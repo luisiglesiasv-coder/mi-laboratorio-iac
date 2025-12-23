@@ -27,6 +27,9 @@
     url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
     dest: "/tmp/vault.zip"
     mode: '0644'
+    # This is the key: if the file exists. Ansible will skip this task
+    # and won't try to connect to the network, avoiding idempotency failures.
+    creates: "/tmp/vault.zip"
 
 - name: 1.5 Unarchive Vault binary to install path
   ansible.builtin.unarchive:
