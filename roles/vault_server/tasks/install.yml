@@ -22,18 +22,11 @@
     shell: /bin/false
     create_home: no
 
-- name: 1.4 Download Vault binary
-  ansible.builtin.get_url:
-    url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
-    dest: "/tmp/vault.zip"
-    mode: '0644'
-    # This is the key: if the file exists. Ansible will skip this task
-    # and won't try to connect to the network, avoiding idempotency failures.
-  register: download_result
-  until: download_result is succeeded
-  retries: 3
-  delay: 5
-  when: not vault_zip_file.stat.exists
+- name: 1.4 Download Vault binary (Simple & Robust)
+  ansible.builtin.command: 
+    cmd: "curl -L -o /tmp/vault.zip https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+  args:
+    creates: "/tmp/vault.zip" # <-- If the file exists, do nothing. Idempotency is preserved.
 
 - name: 1.5 Unarchive Vault binary to install path
   ansible.builtin.unarchive:
