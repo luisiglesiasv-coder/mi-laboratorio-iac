@@ -22,20 +22,16 @@
     shell: /bin/false
     create_home: no
 
-- name: 1.4 Download Vault binary (Simple & Robust)
-  ansible.builtin.command: 
-    cmd: "curl -L -o /tmp/vault.zip https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
-  args:
-    creates: "/tmp/vault.zip" # <-- If the file exists, do nothing. Idempotency is preserved.
-
-- name: 1.5 Unarchive Vault binary to install path
+- name: 1.4 Download and Install Vault binary
   ansible.builtin.unarchive:
-    src: "/tmp/vault.zip"
-    dest: "{{ vault_install_path }}"
+    src: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "/usr/local/bin"
     remote_src: yes
-    owner: root
-    group: root
-    mode: '0755'
+    creates: "/usr/local/bin/vault" # <-- TIP: If the binary already exists, it does nothing.
+  register: vault_download
+  until: vault_download is succeeded
+  retries: 5
+  delay: 10
 
 - name: 1.6 Give Vault binary cap_ipc_lock capability
   community.general.capabilities:
