@@ -77,9 +77,14 @@ def query_auth():
 @then(parsers.parse('the "{method}" method should be enabled'))
 def verify_approle(vault_client, method):
     auth_methods = vault_client.sys.list_auth_methods()
-    # Vault devuelve los métodos con un '/' al final (ej: 'approle/')
-    assert f"{method}/" in auth_methods['data']
-
+    
+    # Lógica inteligente: normalizamos el nombre para que siempre termine en una sola '/'
+    search_key = method if method.endswith('/') else f"{method}/"
+    
+    print(f"\n[DEBUG] Buscando método: '{search_key}' en la lista de Vault")
+    
+    assert search_key in auth_methods['data'], f"No se encontró {search_key} en {list(auth_methods['data'].keys())}"
+    
 @then(parsers.parse('the policy "{policy_name}" should be present in Vault'))
 def verify_policy(vault_client, policy_name):
     # Obtenemos la lista de llaves de las políticas ACL
