@@ -21,7 +21,7 @@ jobs:
 
       - name: 3. Install Ansible Dependencies
         run: |
-          ansible-galaxy collection install -r requirements.yml -p ./collections_external
+          ansible-galaxy collection install -r requirements.yml -p ./collections
 
       - name: 4. Run Molecule (Vault Role)
         run: |
@@ -30,3 +30,4 @@ jobs:
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
+          ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/collections
