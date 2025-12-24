@@ -7,7 +7,9 @@
     token: "{{ vault_root_token_mem }}"
     path: "auth/approle/role/ci-runner"
   register: current_role_raw
-  ignore_errors: true
+  # --- LOGGING LIMPIO ---
+  failed_when: false
+  changed_when: false
 
 - name: ROLE | Create/Update AppRole for CI-Runner
   community.hashi_vault.vault_write:
@@ -28,15 +30,8 @@
     path: "auth/approle/role/ci-runner/role-id"
   register: ci_runner_role_id
 
-# Tarea de depuración para ver la estructura real si algo fallara (opcional, pero útil ahora)
-- name: DEBUG | Show Role ID structure
-  ansible.builtin.debug:
-    var: ci_runner_role_id.data
-  when: molecule_debug | default(false)
-
 - name: LOCAL | Save Role ID to Mac
   ansible.builtin.copy:
-    # CORRECCIÓN DEFINITIVA: Acceso a la estructura anidada data.data.role_id
     content: "{{ ci_runner_role_id.data.data.role_id }}"
     dest: "{{ role_path }}/files/ci_runner_role_id.txt"
     mode: '0600'
@@ -60,7 +55,6 @@
 
 - name: LOCAL | Save Secret ID ONLY if it was newly generated
   ansible.builtin.copy:
-    # CORRECCIÓN DEFINITIVA: Acceso a la estructura anidada data.data.secret_id
     content: "{{ new_secret_id.data.data.secret_id | default('') }}"
     dest: "{{ role_path }}/files/ci_runner_secret_id.txt"
     mode: '0600'
