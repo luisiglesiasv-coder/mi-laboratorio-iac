@@ -7,6 +7,7 @@ ansible==9.1.0
 # 2. Frameworks de Pruebas y BDD
 pytest==8.4.2
 pytest-bdd==8.1.0
+pytest-testinfra==10.1.1
 behave==1.2.6  # <-- Requerido para el ejecutable 'behave'
 
 # 3. Utilidades esenciales de Conexión, Testing y Vault
@@ -18,3 +19,4 @@ redis              # Conexión a Redis
 hvac               # Cliente Python para la API de HashiCorp Vault
 molecule
 molecule-plugins[docker]
+molecule-plugins[testinfra]

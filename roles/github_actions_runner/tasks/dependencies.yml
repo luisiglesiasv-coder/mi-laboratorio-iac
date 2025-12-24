@@ -15,3 +15,4 @@
     state: present
     update_homebrew: no  # <--- Esto evita que se quede "colgado" actualizando
   when: ansible_os_family == "Darwin"
+  become: false

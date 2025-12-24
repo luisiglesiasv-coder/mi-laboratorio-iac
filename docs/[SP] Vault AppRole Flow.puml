@@ -1,0 +1,60 @@
+@startuml
+!pragma teoz true
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+title Flujo Zero-Trust: GitHub Actions Runner & Vault AppRole
+
+participant "GitHub Actions\nRunner (Mac)" as Runner #E3F2FD
+box "Zona Segura de HashiCorp Vault" #FFFDE7
+    participant "Auth Method\n(AppRole)" as AppRole
+    participant "Secrets Engine\n(KV / Database / AWS)" as Secrets
+end box
+
+note over Runner
+  <b>Pre-condiciones en el Runner:</b>
+  1. Tiene el <b>Role ID</b> (Configuración pública/código)
+  2. Tiene el <b>Secret ID</b> (Inyectado desde GitHub Secrets)
+end note
+
+== Fase 1: Autenticación (Conseguir el "Pase de Visitante") ==
+
+Runner -> AppRole : <b>1. Petición de Login</b>\n(Envía Role ID + Secret ID)
+activate Runner
+activate AppRole
+
+AppRole -> AppRole : Verifica credenciales contra\nla definición del Rol
+
+AppRole -->> Runner : <b>2. Devuelve Token de Cliente Temporal</b>\n(Ej: TTL 10 minutos, permisos limitados)
+deactivate AppRole
+
+note over Runner #E6FFEE
+  <b>Cambio de Estado:</b>
+  El Runner ya <b>no necesita</b> el Secret ID.
+  A partir de ahora, usa el Token temporal para todo.
+end note
+
+== Fase 2: Operación (Usar el "Pase" para acceder a recursos) ==
+
+Runner -> Secrets : <b>3. Petición del Secreto Final</b>\n(Ej: credenciales de BBDD)\nHeader: X-Vault-Token: <Token Temporal>
+activate Secrets
+
+Secrets -> Secrets : Verifica validez del Token\ny comprueba Políticas (ACL)
+
+alt #E8F5E9 Permisos Correctos (Policy OK)
+    Secrets -->> Runner : <b>4. Devuelve el Secreto Solicitado</b>\n(Ej: usuario/pass de la DB)
+else #FFEBEE Permisos Denegados (Policy Fail)
+    Secrets -->> Runner : Error 403: Permission Denied
+end
+
+deactivate Secrets
+deactivate Runner
+
+note over Runner
+  El Runner usa el secreto final
+  para conectar al servicio destino.
+end note
+
+@enduml

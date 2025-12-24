@@ -1,0 +1,75 @@
+@startuml
+title Arquitectura del Proyecto y Flujo de Ejecución (Pipeline)
+
+' Estilo del diagrama
+skinparam rectangle {
+    BackgroundColor<<folder>> White
+    BorderColor<<folder>> Black
+}
+skinparam component {
+    BackgroundColor<<file>> LightYellow
+}
+
+' Estructura de Directorios
+package "mi-laboratorio-iac/" {
+    component "requirements.yml" <<file>> as req #Pink
+    
+    package "collections/" #GhostWhite {
+        rectangle "community.hashi_vault" as coll_vault
+        rectangle "community.docker" as coll_docker
+    }
+
+    package "roles/vault_server/" #Azure {
+        
+        package "molecule/default/" #Lavender {
+            component "molecule.yml" <<file>> as mol_cfg
+            component "prepare.yml" <<file>> as mol_prep #LightGreen
+            component "converge.yml" <<file>> as mol_conv #LightGreen
+        }
+
+        package "tasks/" #White {
+            component "main.yml" <<file>> as t_main
+            component "install.yml" <<file>> as t_inst
+            component "service.yml" <<file>> as t_serv
+            component "bootstrap.yml" <<file>> as t_boot
+            component "provision.yml" <<file>> as t_prov
+            
+            package "provisioning/" {
+                component "auth/approle.yml" <<file>> as p_auth
+                component "policies/main.yml" <<file>> as p_pol
+                component "roles/ci_runner.yml" <<file>> as p_role
+            }
+        }
+
+        package "files/" #Ivory {
+            component "vault_init_output.json" <<file>> as f_json
+            component "ci_runner_role_id.txt" <<file>> as f_role
+        }
+    }
+}
+
+' Descripción de Propósitos (Notas)
+note right of req: Define dependencias externas
+note right of mol_prep: Instala hvac en el contenedor
+note bottom of t_boot: Gestiona Init & Unseal (Bootstrap)
+note bottom of p_auth: Usa vault_write para la API
+
+' Orden de Ejecución (Pipeline Flow)
+' Usamos flechas numeradas para indicar el orden
+req -[hidden]down-> mol_cfg
+mol_cfg .[#Blue].> mol_prep : " 1. Setup Infra"
+mol_prep .[#Blue].> mol_conv : " 2. Inicia Test"
+mol_conv .[#Blue].> t_main : " 3. Llama al Rol"
+
+t_main -[#Orange]-> t_inst : " 4. Instala Binarios"
+t_inst -[#Orange]-> t_serv : " 5. Configura Systemd"
+t_serv -[#Orange]-> t_boot : " 6. Inicializa Vault"
+t_boot .[#red].> f_json : " Guarda Keys"
+
+t_boot -[#Orange]-> t_prov : " 7. Inicia Provisión"
+t_prov -[#DarkGreen]-> p_auth : " 8. Auth Methods"
+p_auth -[#DarkGreen]-> p_pol : " 9. ACL Policies"
+p_pol -[#DarkGreen]-> p_role : " 10. AppRoles"
+p_role .[#red].> f_role : " Exporta Credenciales"
+
+@endum

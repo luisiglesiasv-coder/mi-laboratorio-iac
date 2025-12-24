@@ -1,0 +1,60 @@
+@startuml
+!pragma teoz true
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 200
+skinparam ParticipantPadding 20
+skinparam BoxPadding 10
+
+title Zero-Trust Flow: GitHub Actions Runner & Vault AppRole
+
+participant "GitHub Actions\nRunner (Mac)" as Runner #E3F2FD
+box "HashiCorp Vault Secure Zone" #FFFDE7
+    participant "Auth Method\n(AppRole)" as AppRole
+    participant "Secrets Engine\n(KV / Database / AWS)" as Secrets
+end box
+
+note over Runner
+  <b>Runner Pre-conditions:</b>
+  1. Has <b>Role ID</b> (Public config/code)
+  2. Has <b>Secret ID</b> (Injected from GitHub Secrets)
+end note
+
+== Phase 1: Authentication (Obtaining the "Visitor Pass") ==
+
+Runner -> AppRole : <b>1. Login Request</b>\n(Sends Role ID + Secret ID)
+activate Runner
+activate AppRole
+
+AppRole -> AppRole : Verifies credentials against\nRole definition
+
+AppRole -->> Runner : <b>2. Returns Temporary Client Token</b>\n(e.g., 10m TTL, limited permissions)
+deactivate AppRole
+
+note over Runner #E6FFEE
+  <b>State Change:</b>
+  The Runner <b>no longer needs</b> the Secret ID.
+  From now on, it uses the temporary Token for everything.
+end note
+
+== Phase 2: Operation (Using the "Pass" to access resources) ==
+
+Runner -> Secrets : <b>3. Final Secret Request</b>\n(e.g., DB credentials)\nHeader: X-Vault-Token: <Temporary Token>
+activate Secrets
+
+Secrets -> Secrets : Verifies Token validity\nand checks Policies (ACL)
+
+alt #E8F5E9 Permissions Correct (Policy OK)
+    Secrets -->> Runner : <b>4. Returns Requested Secret</b>\n(e.g., DB user/pass)
+else #FFEBEE Permissions Denied (Policy Fail)
+    Secrets -->> Runner : Error 403: Permission Denied
+end
+
+deactivate Secrets
+deactivate Runner
+
+note over Runner
+  The Runner uses the final secret
+  to connect to the target service.
+end note
+
+@enduml

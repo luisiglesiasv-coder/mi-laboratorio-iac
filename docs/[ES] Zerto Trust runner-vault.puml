@@ -1,0 +1,76 @@
+@startuml
+title Secuencia de Automatización: HashiCorp Vault con Ansible & Molecule
+
+' Definición de Estilos
+skinparam Style strictuml
+skinparam sequenceMessageAlign center
+
+' Definición de Actores y Componentes
+actor "Luis (DevOps)" as User
+box "Ansible Controller (Mac)" #LightBlue
+    participant "Molecule" as Mol
+    participant "Ansible Playbook" as Ans
+    participant "Local Storage" as Disk
+end box
+
+box "Infraestructura (Docker)" #LightGray
+    participant "Vault Container" as Target
+    participant "Vault API" as API
+end box
+
+' --- INICIO DEL FLUJO ---
+autonumber
+
+== Fase 0: Setup de Infraestructura ==
+User -> Mol: molecule converge
+Note over Mol: Fichero: molecule.yml
+Mol -> Target: create (Levanta contenedor Ubuntu)
+Mol -> Target: prepare (Instala python3-pip & hvac)
+Note right of Target: Fichero: molecule/default/prepare.yml
+
+== Fase 1 & 2: Instalación y Sistema ==
+Ans -> Target: Ejecuta tasks/install.yml
+Note right of Target: Objeto: Binario Vault + Directorios
+Ans -> Target: Ejecuta tasks/service.yml
+Note right of Target: Objeto: vault.service (Systemd)
+Target -> Target: Start Vault Service (Port 8200)
+
+== Fase 3: Bootstrap (Initialization & Unseal) ==
+Ans -> API: GET /v1/sys/init
+Note over Ans, API: Fichero: tasks/bootstrap.yml
+API -->> Ans: JSON: { "initialized": false }
+
+Ans -> API: PUT /v1/sys/init
+API -->> Ans: JSON: { "keys": [...], "root_token": "hvs..." }
+Ans -> Disk: Guardar vault_init_output.json
+Note left of Disk: Ruta: roles/vault_server/files/
+
+Ans -> API: PUT /v1/sys/unseal (Usa llaves del JSON)
+API -->> Ans: Status: Unsealed (Vault Ready)
+
+== Fase 4: Modular Provisioning (Uso de vault_write) ==
+Ans -> API: POST /v1/sys/auth/approle
+Note over Ans, API: Fichero: auth/approle.yml
+Note right of API: Objeto: { "type": "approle" }
+
+Disk -> Ans: Leer ci-runner-policy.hcl
+Ans -> API: PUT /v1/sys/policies/acl/ci-runner-policy
+Note over Ans, API: Fichero: policies/main.yml
+Note right of API: Objeto: Policy String (HCL)
+
+Ans -> API: POST /v1/auth/approle/role/ci-runner
+Note over Ans, API: Fichero: roles/ci_runner.yml
+Note right of API: Objeto: { "token_policies": ["ci-runner-policy"] }
+
+== Fase 5: Extracción de Credenciales Finales ==
+Ans -> API: GET /v1/auth/approle/role/ci-runner/role-id
+API -->> Ans: JSON: { "role_id": "..." }
+Ans -> Disk: Guardar ci_runner_role_id.txt
+
+Ans -> API: POST /v1/auth/approle/role/ci-runner/secret-id
+API -->> Ans: JSON: { "secret_id": "..." }
+Ans -> Disk: Guardar ci_runner_secret_id.txt
+
+== FIN ==
+Ans -->> User: Playbook Recap: Failed=0
+@endum
