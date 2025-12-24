@@ -1,60 +1,71 @@
 ---
-# tasks/provisioning/roles/ci_runner.yml
+# tasks/provisioning/roles/ci-runner.yml
 
-- name: "ROLE | Create/Update AppRole for CI-Runner"
+- name: ROLE | Check if AppRole for CI-Runner exists (Idempotency Check)
+  community.hashi_vault.vault_read:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "auth/approle/role/ci-runner"
+  register: current_role_raw
+  ignore_errors: true
+
+- name: ROLE | Create/Update AppRole for CI-Runner
   community.hashi_vault.vault_write:
     url: "{{ vault_addr }}"
     token: "{{ vault_root_token_mem }}"
     path: "auth/approle/role/ci-runner"
     data:
-      token_policies: ["ci-runner-policy"]
-      token_ttl: "10m"
-      token_max_ttl: "20m"
-      token_num_uses: 50
+      token_policies: "ci-runner-policy"
+      token_ttl: "1h"
+      token_max_ttl: "4h"
+  when: current_role_raw.failed
+  register: role_creation_result
 
-# --- GESTIÓN DEL ROLE ID ---
-
-- name: "ROLE | Get Role ID for ci-runner"
+- name: ROLE | Get Role ID for ci-runner
   community.hashi_vault.vault_read:
     url: "{{ vault_addr }}"
     token: "{{ vault_root_token_mem }}"
     path: "auth/approle/role/ci-runner/role-id"
-  register: ci_runner_role_id_raw
+  register: ci_runner_role_id
 
-- name: "LOCAL | Save Role ID to Mac"
+# Tarea de depuración para ver la estructura real si algo fallara (opcional, pero útil ahora)
+- name: DEBUG | Show Role ID structure
+  ansible.builtin.debug:
+    var: ci_runner_role_id.data
+  when: molecule_debug | default(false)
+
+- name: LOCAL | Save Role ID to Mac
   ansible.builtin.copy:
-    # Intentamos primero data.role_id, y si falla, data.data.role_id
-    content: "{{ ci_runner_role_id_raw.data.role_id | default(ci_runner_role_id_raw.data.data.role_id) }}"
-    dest: "{{ vault_unseal_keys_dir }}/ci_runner_role_id.txt"
+    # CORRECCIÓN DEFINITIVA: Acceso a la estructura anidada data.data.role_id
+    content: "{{ ci_runner_role_id.data.data.role_id }}"
+    dest: "{{ role_path }}/files/ci_runner_role_id.txt"
     mode: '0600'
   delegate_to: localhost
-  become: no
+  become: false
 
-# --- GESTIÓN DEL SECRET ID ---
-
-- name: "LOCAL | Check if Secret ID file exists on Mac"
+- name: LOCAL | Check if Secret ID file exists on Mac
   ansible.builtin.stat:
-    path: "{{ vault_unseal_keys_dir }}/ci_runner_secret_id.txt"
+    path: "{{ role_path }}/files/ci_runner_secret_id.txt"
   register: secret_id_file
   delegate_to: localhost
-  become: no
+  become: false
 
-- name: "ROLE | Generate new Secret ID ONLY if missing"
+- name: ROLE | Generate new Secret ID ONLY if missing
   community.hashi_vault.vault_write:
     url: "{{ vault_addr }}"
     token: "{{ vault_root_token_mem }}"
     path: "auth/approle/role/ci-runner/secret-id"
-  register: ci_runner_secret_id_raw
-  when: not secret_id_file.stat.exists
+  register: new_secret_id
+  when: not (secret_id_file.stat.exists | default(false))
 
-- name: "LOCAL | Save Secret ID ONLY if it was newly generated"
+- name: LOCAL | Save Secret ID ONLY if it was newly generated
   ansible.builtin.copy:
-    # Aplicamos la misma lógica de seguridad para el secret_id
-    content: "{{ ci_runner_secret_id_raw.data.secret_id | default(ci_runner_secret_id_raw.data.data.secret_id | default('')) }}"
-    dest: "{{ vault_unseal_keys_dir }}/ci_runner_secret_id.txt"
+    # CORRECCIÓN DEFINITIVA: Acceso a la estructura anidada data.data.secret_id
+    content: "{{ new_secret_id.data.data.secret_id | default('') }}"
+    dest: "{{ role_path }}/files/ci_runner_secret_id.txt"
     mode: '0600'
   delegate_to: localhost
-  become: no
+  become: false
   when: 
-    - not secret_id_file.stat.exists
-    - ci_runner_secret_id_raw is not skipped
+    - new_secret_id is defined
+    - new_secret_id.changed

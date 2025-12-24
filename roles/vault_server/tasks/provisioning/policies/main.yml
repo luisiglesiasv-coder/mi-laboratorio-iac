@@ -1,23 +1,28 @@
 ---
 # tasks/provisioning/policies/main.yml
 
-- name: "POLICY | Read current policy from Vault"
+- name: POLICY | Read current policy from Vault to check idempotency
   community.hashi_vault.vault_read:
     url: "{{ vault_addr }}"
     token: "{{ vault_root_token_mem }}"
     path: "sys/policies/acl/ci-runner-policy"
-  register: current_policy
+  register: current_policy_raw
   ignore_errors: true
 
-- name: "POLICY | Register CI-Runner policy in Vault"
+- name: POLICY | Register CI-Runner policy in Vault
   community.hashi_vault.vault_write:
     url: "{{ vault_addr }}"
     token: "{{ vault_root_token_mem }}"
     path: "sys/policies/acl/ci-runner-policy"
     data:
-      policy: "{{ lookup('ansible.builtin.file', 'ci-runner-policy.hcl') }}"
-  # Usamos 'default' para evitar el error de "no attribute"
+      policy: "{{ lookup('file', 'ci-runner-policy.hcl') }}"
+  # CORRECCIÓN: Accedemos a data.data.policy para la comparación
   when: >
-    current_policy.failed or 
-    (current_policy.data is not defined) or
-    ((current_policy.data.policy | default('')) | trim) != (lookup('ansible.builtin.file', 'ci-runner-policy.hcl') | trim)
+    current_policy_raw.failed or 
+    (current_policy_raw.data.data.policy | default('') | trim) != (lookup('file', 'ci-runner-policy.hcl') | trim)
+  register: policy_write_result
+
+- name: POLICY | Status report
+  ansible.builtin.debug:
+    msg: "Policy was already up to date."
+  when: policy_write_result is not defined or not policy_write_result.changed
