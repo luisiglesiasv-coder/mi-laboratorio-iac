@@ -1,5 +1,6 @@
 ---
 # roles/vault_server/defaults/main.yml
+# Default variables for the vault_server role
 
 # --- 1. Binary Installation ---
 vault_version: "1.15.4"
@@ -18,19 +19,31 @@ vault_addr: "http://127.0.0.1:{{ vault_port }}"
 
 # --- 4. Vault Engine Behavior ---
 vault_ui: true
-vault_disable_mlock: true # This avoids the setcap requirement in Docker
+vault_disable_mlock: true # Avoids setcap requirements in Docker/Containers
 vault_log_level: "info"
 
 # --- 5. Initialization & Unsealing (Bootstrap) ---
 vault_init_shares: 1
 vault_init_threshold: 1
-vault_init_output_file: "/tmp/vault_init.json"
 
 # --- 6. Local Storage for Mac (Credential Persistence) ---
-# Points to the 'files' directory inside the current role
+# Points to the 'files' directory inside the current role for local persistence
 vault_unseal_keys_dir: "{{ role_path }}/files"
 vault_unseal_keys_file_name: "vault_init_output.json"
+# This is the path used by the controller (your Mac) to read/write the keys
+vault_local_init_file: "{{ vault_unseal_keys_dir }}/{{ vault_unseal_keys_file_name }}"
 
-# --- 7. Modular Engine Toggle ---
-# Default to empty so the 'default' scenario doesn't try to load engines
+# --- 7. Modular Provisioning Logic (Phase 4) ---
+# Main toggle to enable/disable the entire internal configuration phase
+vault_run_provisioning: true
+
+# List of Authentication Methods to enable (Triggers tasks/provisioning/auth/*.yml)
+vault_enabled_auth_methods:
+  - approle
+
+# List of AppRoles to configure (Triggers tasks/provisioning/roles/*.yml)
+vault_enabled_app_roles:
+  - ci-runner
+
+# List of Secret Engines to enable (Triggers tasks/provisioning/engines/*.yml)
 enabled_vault_engines: []

@@ -1,6 +1,7 @@
 ---
 - name: Converge Vault (Unit Test)
   hosts: all
+  become: true
   tasks:
     - name: "Include vault_server role"
       ansible.builtin.include_role:

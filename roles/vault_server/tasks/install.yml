@@ -42,9 +42,9 @@
   # In Docker, where we disable mlock, this task is skipped, ensuring idempotency.
   when: not vault_disable_mlock | bool
 
-- name: 1.7 Create configuration and data directories
+- name: "INSTALL | 1.7 Create configuration and data directories"
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ path_item }}"
     state: directory
     owner: vault
     group: vault
@@ -52,6 +52,8 @@
   loop:
     - "{{ vault_config_path }}"
     - "{{ vault_data_path }}"
+  loop_control:
+    loop_var: path_item
 
 - name: 1.8 Template Vault configuration file (HCL)
   ansible.builtin.template:

@@ -18,6 +18,7 @@ provisioner:
   env:
     # Anchor Ansible to the project's roles directory
     ANSIBLE_ROLES_PATH: ../../../
+    ANSIBLE_COLLECTIONS_PATH: ../../../../collections
   # --- SHARED LOGIC REDIRECTION ---
   playbooks:
     cleanup: ../_shared/cleanup.yml
@@ -27,11 +28,8 @@ provisioner:
       host_key_checking: false
       interpreter_python: auto_silent
 # Replace the default verifier with pytest for better BDD support
-# verifier:
-#  name: ansible
 verifier:
   name: testinfra
   options:
     v: true
-    # This ensures that BDD results look good in the terminal.
     tb: native

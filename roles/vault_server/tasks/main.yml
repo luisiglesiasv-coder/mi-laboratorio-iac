@@ -1,21 +1,48 @@
 ---
-# Main tasks for the vault_server role
-# Orchestrates Installation, Service Management, and Modular Provisioning
+# roles/vault_server/tasks/main.yml
+# Main Orchestrator for Vault: Install -> Service -> Bootstrap -> Provision
 
-- name: "[PHASE 1] Install Vault Binary and System Requirements"
-  # This handles downloading, unarchiving, and setting Linux capabilities
-  ansible.builtin.import_tasks: install.yml
+- name: "[PHASE 1 & 2] Installation and Service"
+  # us include_tasks to improve the compatibility with Molecule
+  ansible.builtin.include_tasks: "{{ item }}"
+  loop:
+    - install.yml
+    - service.yml
 
-- name: "[PHASE 2] Configure Systemd Service and Runtime"
-  # This sets up the .service file and ensures Vault is 'active (running)'
-  ansible.builtin.import_tasks: service.yml
-
-- name: "End of PHASE 2 --> Force handlers to run now"
-  # This ensures any 'Restart Vault' notification happens BEFORE unsealing
+- name: "CRITICAL | Flush handlers to ensure Vault is running"
   ansible.builtin.meta: flush_handlers
 
-- name: "[PHASE 3] Modular Provisioning of Engines and Roles"
-  # This phase configures the logic (Postgres, Redis, AppRoles)
-  # It only runs if the service is up and unsealed
-  ansible.builtin.import_tasks: provision.yml
-  when: vault_run_provisioning | default(true)
+- name: "[PHASE 3] Bootstrap (Initialization & Unsealing)"
+  ansible.builtin.include_tasks: bootstrap.yml
+
+# ===================================================================
+# --- CRITICAL SECTION: Load Root Token for Provisioning ---
+# ===================================================================
+- name: "[PRE-PHASE 4] Load Root Token into memory"
+  block:
+    - name: "TOKEN | Read init results from Mac"
+      ansible.builtin.slurp:
+        src: "{{ vault_local_init_file }}"
+      register: vault_init_slurp
+      delegate_to: localhost
+      become: false
+
+    - name: "TOKEN | Extract root_token to fact"
+      ansible.builtin.set_fact:
+        # Extract the token from the JSON by decoding the base64 from slurp
+        vault_root_token_mem: "{{ (vault_init_slurp.content | b64decode | from_json).root_token }}"
+      no_log: true  # Security: do not show the token in Ansible logs
+  rescue:
+    - name: "TOKEN | Warning"
+      ansible.builtin.debug:
+        msg: "WARNING: No root token found at {{ vault_local_init_file }}. Provisioning might fail."
+
+# ===================================================================
+# --- PHASE 4: Provisioning ---
+# ===================================================================
+- name: "[PHASE 4] Modular Provisioning"
+  ansible.builtin.include_tasks: provision.yml
+  # We only attempt provisioning if we have a token and the phase is active
+  when: 
+    - vault_run_provisioning | default(true)
+    - vault_root_token_mem is defined

@@ -1,0 +1,8 @@
+---
+- name: Prepare
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: "Instalar dependencias de Python dentro del contenedor"
+      raw: apt-get update && apt-get install -y python3-pip && pip3 install hvac
+      become: true

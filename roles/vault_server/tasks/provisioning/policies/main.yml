@@ -1,0 +1,23 @@
+---
+# tasks/provisioning/policies/main.yml
+
+- name: "POLICY | Read current policy from Vault"
+  community.hashi_vault.vault_read:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "sys/policies/acl/ci-runner-policy"
+  register: current_policy
+  ignore_errors: true
+
+- name: "POLICY | Register CI-Runner policy in Vault"
+  community.hashi_vault.vault_write:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "sys/policies/acl/ci-runner-policy"
+    data:
+      policy: "{{ lookup('ansible.builtin.file', 'ci-runner-policy.hcl') }}"
+  # Usamos 'default' para evitar el error de "no attribute"
+  when: >
+    current_policy.failed or 
+    (current_policy.data is not defined) or
+    ((current_policy.data.policy | default('')) | trim) != (lookup('ansible.builtin.file', 'ci-runner-policy.hcl') | trim)
