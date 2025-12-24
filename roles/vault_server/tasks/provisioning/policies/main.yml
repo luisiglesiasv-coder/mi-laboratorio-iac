@@ -16,13 +16,12 @@
     token: "{{ vault_root_token_mem }}"
     path: "sys/policies/acl/ci-runner-policy"
     data:
-      # Enviamos el contenido del archivo HCL
       policy: "{{ lookup('file', 'ci-runner-policy.hcl') }}"
-  # Solo escribimos si no existe (failed) o si el contenido es distinto
+  # CORRECCIÓN: Accedemos a data.data.policy (Estructura real de la API de Vault)
   when: >
     current_policy_raw.failed or 
-    current_policy_raw.data is not defined or
-    (current_policy_raw.data.policy | default('') | trim) != (lookup('file', 'ci-runner-policy.hcl') | trim)
+    current_policy_raw.data.data is not defined or
+    (current_policy_raw.data.data.policy | default(current_policy_raw.data.data.rules) | default('') | trim) != (lookup('file', 'ci-runner-policy.hcl') | trim)
   register: policy_write_result
 
 - name: POLICY | Status report

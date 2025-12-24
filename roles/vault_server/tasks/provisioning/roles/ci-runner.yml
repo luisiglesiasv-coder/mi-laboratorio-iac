@@ -7,7 +7,6 @@
     token: "{{ vault_root_token_mem }}"
     path: "auth/approle/role/ci-runner"
   register: current_role_raw
-  # --- LOGGING LIMPIO ---
   failed_when: false
   changed_when: false
 
@@ -20,7 +19,8 @@
       token_policies: "ci-runner-policy"
       token_ttl: "1h"
       token_max_ttl: "4h"
-  when: current_role_raw.failed
+  # CORRECCIÓN: Si no hay datos (data is not defined), forzamos creación
+  when: current_role_raw.failed or current_role_raw.data is not defined
   register: role_creation_result
 
 - name: ROLE | Get Role ID for ci-runner
@@ -29,6 +29,10 @@
     token: "{{ vault_root_token_mem }}"
     path: "auth/approle/role/ci-runner/role-id"
   register: ci_runner_role_id
+  # --- ESTO ES LO QUE TE SALVARÁ EN CI ---
+  retries: 3
+  delay: 2
+  until: not ci_runner_role_id.failed
 
 - name: LOCAL | Save Role ID to Mac
   ansible.builtin.copy:
