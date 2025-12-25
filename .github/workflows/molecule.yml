@@ -13,8 +13,8 @@ jobs:
       fail-fast: false # Permite que si falla uno, el otro intente terminar
       max-parallel: 1
       matrix:
-      #  scenario: [default, integration-postgres]
-        scenario: [integration-postgres]
+        scenario: [default, integration-postgres]
+      # scenario: [integration-postgres]
     
     steps:
       - name: 1. Checkout repository
