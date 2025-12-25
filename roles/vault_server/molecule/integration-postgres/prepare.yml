@@ -1,0 +1,23 @@
+---
+- name: Prepare Integration Environment
+  hosts: vault-integration
+  gather_facts: false
+  tasks:
+    - name: Install Python dependencies for Vault
+      ansible.builtin.apt:
+        name: 
+          - python3-pip
+          - python3-venv
+          - libpq-dev   # psycopg2 dependency
+        state: present
+        update_cache: true
+
+    - name: Install hvac via pip
+      ansible.builtin.pip:
+        name: hvac
+
+    - name: PSQL | Install psycopg2 for Python integration tests
+      ansible.builtin.pip:
+        name: 
+          - psycopg2-binary
+        state: present

@@ -1,365 +1,316 @@
-# Ansible Role: Vault Server Configuration
+# Ansible Role: vault_server
 
-Este role se encarga de configurar un servidor HashiCorp Vault en modo desarrollo para habilitar la gestión de secretos dinámicos de PostgreSQL y preparar la autenticación AppRole para la integración con un sistema de CI/CD.
+A high-performance Ansible role designed for the automated deployment, bootstrapping, and modular provisioning of **HashiCorp Vault**. This role simulates a complete **"Secrets as a Service"** environment, integrating Vault with external databases (PostgreSQL) and generating secure machine identities (AppRole) for modern CI/CD pipelines.
 
-Este role muestra como configurar un servidor HashiCorp Vault en modo desarrollo para simular un entorno completo de 'Secretos como Servicio', conectando Vault con una base de datos PostgreSQL y generando las identidades necesarias para que un pipeline externo pueda autenticarse.
+---
 
-## Descripción General de la Arquitectura
+## 🚀 Key Features
+
+* **Zero-Trust Architecture**: Implements the principle of least privilege by replacing Root Tokens with specific AppRoles.
+* **Automated Bootstrap**: Handles the critical `init` and `unseal` lifecycle, persisting master keys locally on the controller.
+* **Modular Provisioning**: Orchestrates Auth Methods, ACL Policies, and Secrets Engines via Vault API.
+* **Dynamic Secrets Engine**: Ready-to-use integration with **PostgreSQL**, generating on-demand users with limited TTLs.
+* **Hybrid Testing Architecture**: Scenarios tested via internal Docker networks and validated from the host machine via port mapping.
+* **Industrial-Grade Testing**: Full lifecycle validation using **Molecule**, **Testinfra**, and **Pytest-BDD** (Gherkin style).
+* **Strict Idempotency**: Advanced logic for API state comparison (handling complex nested JSON responses).
+
+---
+
+## 📋 Prerequisites & System Dependencies
+
+To maintain reproducibility across different environments (Mac/Linux), ensure the following system-level dependencies are installed on your **controller/runner**:
+
+### **macOS (Homebrew)**
+The integration tests require PostgreSQL client headers to link the Python `psycopg2` driver during host-based verification.
+```bash
+brew install postgresql  # Essential for psycopg2-binary to link correctly on the host
+```
+
+### **Python Environment**
+```bash
+pip install -r requirements.txt
+```
+*Note: The environment includes `hvac` for Vault API and `psycopg2-binary` for database connectivity tests.*
+
+---
+
+## 🏗️ Architecture Overview
+
+This role establishes a secure bridge between your GitHub Actions Runner and your target infrastructure, using Vault as the centralized identity broker.
 
 ```mermaid
 graph TD
-    %% Definición de Estilos
+    %% Styles
     classDef external fill:#f9f,stroke:#333,stroke-width:2px,color:black;
     classDef vaultEngine fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:black;
     classDef vaultAuth fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:black;
     classDef vaultPolicy fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:black,stroke-dasharray: 5 5;
     classDef vaultConfig fill:#eceff1,stroke:#546e7a,stroke-width:1px,color:black;
 
-    %% Nodos Externos
-    PG[(Servidor PostgreSQL\n10.0.0.31:5432)]:::external
-    RUNNER{{Github Local Runner\nCI/CD}}:::external
+    %% External Nodes
+    PG[(PostgreSQL Server\n10.0.0.31:5432)]:::external
+    RUNNER{{GitHub Actions Runner\nCI/CD Pipeline}}:::external
 
-    %% Límite del Servidor Vault
-    subgraph "Servidor HASHICORP VAULT (Contenedor)"
+    %% Vault Server Boundaries
+    subgraph "Vault Server (Container/Host)"
         
-        %% --- SECCIÓN TAREA 1: Base de Datos ---
-        subgraph "Motor de Secretos (TAREA 1)"
-            DB_ENGINE[/"Motor: database/\n(Ruta: /sys/mounts/database)"/]:::vaultEngine
+        %% --- Secrets Engine Section ---
+        subgraph "Secrets Engine (Database)"
+            DB_ENGINE[/"Engine: database/\n(Path: /sys/mounts/database)"/]:::vaultEngine
+            DB_CONFIG["Connection Config\n(Admin: 'postgres')"]:::vaultConfig
+            DB_ROLE["DB Role: 'runner_role'\n(SQL Templates & TTLs)"]:::vaultConfig
             
-            DB_CONFIG["Configuración Conexión\n(Usuario Admin 'postgres')"]:::vaultConfig
-            
-            DB_ROLE["DB Rol: 'runner_role'\n(Define SQL y TTLs 1h)"]:::vaultConfig
-            
-            DB_CONFIG -->|Configura| DB_ENGINE
-            DB_ROLE -->|Define reglas para| DB_ENGINE
+            DB_CONFIG -->|Configures| DB_ENGINE
+            DB_ROLE -->|Defines rules for| DB_ENGINE
         end
 
-        %% --- SECCIÓN TAREA 2: Autenticación y Políticas ---
-        subgraph "Autenticación y Permisos (TAREA 2)"
-            AUTH_METHOD[/"Método Auth: AppRole\n(Ruta: /sys/auth/approle)"/]:::vaultAuth
-            
-            APPROLE["AppRole: 'ci-runner'\n(Identidad para el Runner)"]:::vaultConfig
-            
-            POLICY["Política: 'runner-policy'\n(Permite leer creds de runner_role)"]:::vaultPolicy
+        %% --- Auth & Policies Section ---
+        subgraph "Auth & Permissions (AppRole)"
+            AUTH_METHOD[/"Auth Method: AppRole\n(Path: auth/approle)"/]:::vaultAuth
+            APPROLE["AppRole: 'ci-runner'\n(Machine Identity)"]:::vaultConfig
+            POLICY["Policy: 'runner-policy'\n(Allow read on runner_role)"]:::vaultPolicy
 
-            APPROLE -->|Pertenece a| AUTH_METHOD
-            APPROLE -->|Tiene asignada| POLICY
+            APPROLE -->|Belongs to| AUTH_METHOD
+            APPROLE -->|Assigned| POLICY
         end
 
-        %% --- EL PUENTE ---
-        POLICY -.->|Autoriza acceso a la ruta| DB_ROLE
+        POLICY -.->|Authorizes access| DB_ROLE
     end
 
-    %% Relaciones Externas
-    DB_CONFIG ===>|Conexión Administrativa Permanente| PG
-    RUNNER ===>|Se autentica usando RoleID+SecretID| APPROLE
-
-    %% Leyenda
-    subgraph Leyenda
-        L1(Sistema Externo):::external
-        L2(Motor/Método Habilitado):::vaultEngine
-        L3(Objeto de Configuración):::vaultConfig
-        L4(Política ACL):::vaultPolicy
-    end
+    %% External Relations
+    DB_CONFIG ===>|Permanent Admin Connection| PG
+    RUNNER ===>|Authenticates via RoleID + SecretID| APPROLE
 ```
 
-## Flujo de Trabajo Detallado
+---
 
-### Parte 1: Configuración de Motores y Autenticación
+## 📂 Project Structure
 
-Esta sección establece la configuración base de Vault, incluyendo la integración con la base de datos PostgreSQL y la definición de políticas y roles de autenticación necesarios para el flujo de trabajo.
+The role follows the standard Ansible hierarchy with specialized provisioning modules:
 
-#### Flujo de Automatización con Ansible para la Obtención y Almacenamiento Seguro de Credenciales AppRole (RoleID y SecretID)
+```text
+.
+├── README.md               # Main documentation
+├── requirements.txt          # Python dependencies (hvac, psycopg2, etc.)
+├── defaults
+│   └── main.yml            # Role variables and defaults
+├── files
+│   ├── ci-runner-policy.hcl      # ACL definition
+│   ├── ci_runner_role_id.txt     # Extracted RoleID (Generated)
+│   ├── ci_runner_secret_id.txt   # Extracted SecretID (Generated)
+│   └── vault_init_output.json    # Master keys/Root Token (Generated)
+├── handlers
+│   └── main.yml            # Service restart logic
+├── tasks
+│   ├── main.yml            # Main orchestrator
+│   ├── install.yml         # Binary deployment and OS users
+│   ├── service.yml         # Systemd unit configuration
+│   ├── bootstrap.yml       # Critical: Init & Unseal logic
+│   ├── provision.yml       # API configuration bridge
+│   └── provisioning/       # API-specific logic (vault_write)
+│       ├── auth/           # Auth backends (AppRole)
+│       ├── engines/        # Secrets engines (DB, Redis)
+│       ├── policies/       # ACL Policy management
+│       └── roles/          # AppRole and DB role definitions
+├── molecule/               # Testing lab
+│   ├── default/            # Unit testing scenario
+│   └── integration-postgres/ # Advanced integration scenario
+│       ├── molecule.yml      # Configures Port Mapping (8200, 5432)
+│       └── tests/            # BDD Verification (test_postgres_integration.py)
+└── templates
+    ├── vault.hcl.j2        # Vault HCL configuration template
+    └── vault.service.j2    # Systemd service template
+```
 
-Este despliegue tiene un objetivo principal: Sustituir el peligroso Token Root por un sistema de "menor privilegio".
+---
 
-En lugar de usar una llave maestra para todo, estamos construyendo una "puerta lateral" específica para que tu Runner de CI/CD solo pueda entrar a recoger credenciales de base de datos temporales y nada más.
+## ⚙️ Key Variables Glossary (`defaults/main.yml`)
 
-Vamos a desglosar el diagrama anterior, pieza por pieza, viendo el código que lo hace realidad.
+| Variable | Purpose | Default / Example |
+| :--- | :--- | :--- |
+| `vault_version` | HashiCorp Vault binary version to download. | `1.15.4` |
+| `vault_addr` | Local URL where the Vault API listens. | `http://127.0.0.1:8200` |
+| `vault_config_dir` | System directory for `vault.hcl`. | `/etc/vault.d` |
+| `vault_data_dir` | Persistence directory for the storage backend. | `/opt/vault/data` |
+| `vault_unseal_keys_dir` | Local path on the controller to persist master keys. | `{{ role_path }}/files` |
+| `vault_enabled_app_roles` | List of AppRoles to provision in the API. | `['ci-runner']` |
 
-##### Parte 1: El Lado de la Base de Datos (El Tesoro)
-En esta parte configuramos la "fábrica de credenciales". Vault necesita permiso para acceder a PostgreSQL y una plantilla para saber cómo crear usuarios.
+---
 
-###### 1. El Motor (DB_ENGINE) y la Conexión Admin (DB_CONFIG)
+## 🔄 Automation Workflows
 
-Función: Primero, "encendemos" la capacidad de Vault para manejar bases de datos (Tarea 1.2). Después, le damos a Vault las llaves del reino: el usuario y contraseña de superusuario (postgres) de tu servidor real (Tarea 1.3).
+### 1. Provisioning Sequence
+This diagram represents the full lifecycle from `molecule converge` to final credential persistence.
 
-Por qué es vital: Sin esto, Vault no puede conectarse a tu PostgreSQL 10.0.0.31 para crear y borrar usuarios dinámicamente.
+```plantuml
+@startuml
+title Automation Sequence: HashiCorp Vault with Ansible & Molecule
 
-```YAML
-# --- Código Ansible: Habilitar motor y configurar conexión ---
-- name: 1.2 Habilitar el motor de secretos dinamicos 'database/'
-  community.hashi_vault.vault_write:
-    url: "{{ vault_addr }}"
-    token: "{{ vault_token }}"
-    path: sys/mounts/database
-    data:
-      type: database
-# ... (luego sigue la Tarea 1.3 que configura la conexión_url, username y password) ...
+skinparam Style strictuml
+skinparam sequenceMessageAlign center
+
+actor "DevOps Engineer" as User
+box "Ansible Controller (Local)" #LightBlue
+    participant "Molecule" as Mol
+    participant "Ansible" as Ans
+    participant "Filesystem" as Disk
+end box
+
+box "Infrastructure (Docker)" #LightGray
+    participant "Vault Node" as Target
+    participant "Vault API" as API
+end box
+
+autonumber
+== Phase 0: Environment Setup ==
+User -> Mol: molecule converge
+Mol -> Target: Create (Ubuntu Container)
+Mol -> Target: Prepare (Install python3-pip & hvac)
+
+== Phase 1 & 2: System & Service ==
+Ans -> Target: install.yml (Binaries & Permissions)
+Ans -> Target: service.yml (Systemd unit)
+Target -> Target: Start Vault Service (Port 8200)
+
+== Phase 3: Bootstrap (Initialization & Unseal) ==
+Ans -> API: GET /v1/sys/init
+API -->> Ans: { "initialized": false }
+Ans -> API: PUT /v1/sys/init
+API -->> Ans: { "keys": [...], "root_token": "hvs..." }
+Ans -> Disk: Save vault_init_output.json
+
+Ans -> API: PUT /v1/sys/unseal (Using stored keys)
+API -->> Ans: Status: Unsealed (Vault Ready)
+
+== Phase 4: Modular Provisioning ==
+Ans -> API: POST /v1/sys/auth/approle
+Ans -> API: PUT /v1/sys/policies/acl/ci-runner-policy
+Ans -> API: POST /v1/auth/approle/role/ci-runner
+
+== Phase 5: Credential Extraction ==
+Ans -> API: GET /v1/auth/approle/role/ci-runner/role-id
+Ans -> Disk: Save ci_runner_role_id.txt
+Ans -> API: POST /v1/auth/approle/role/ci-runner/secret-id
+Ans -> Disk: Save ci_runner_secret_id.txt
+
+Ans -->> User: Playbook Recap: Failed=0
+@enduml
+```
+
+### 2. Runtime Zero-Trust Flow
+How the GitHub Actions Runner interacts with the provisioned Vault server.
+
+```plantuml
+@startuml
+title Zero-Trust Flow: GitHub Actions Runner & Vault AppRole
+
+participant "GitHub Actions\nRunner" as Runner #E3F2FD
+box "Vault Secure Zone" #FFFDE7
+    participant "Auth (AppRole)" as AppRole
+    participant "Secrets Engine" as Secrets
+end box
+
+note over Runner
+  **Pre-conditions:**
+  1. Has Role ID (Public config)
+  2. Has Secret ID (GitHub Secret)
+end note
+
+== Phase 1: Authentication ==
+Runner -> AppRole : **Login Request** (Role ID + Secret ID)
+activate Runner
+activate AppRole
+AppRole -> AppRole : Verify Credentials
+AppRole -->> Runner : **Temporary Client Token** (Limited TTL/Perms)
+deactivate AppRole
+
+== Phase 2: Operations ==
+Runner -> Secrets : **Secret Request** (DB Credentials)\nHeader: X-Vault-Token
+activate Secrets
+alt #E8F5E9 Policy OK
+    Secrets -->> Runner : **Requested Secret** (User/Pass)
+else #FFEBEE Policy Denied
+    Secrets -->> Runner : Error 403: Forbidden
+end
+deactivate Secrets
+deactivate Runner
+@enduml
+```
+
+---
+
+## 🧪 Testing and Quality Assurance
+
+### Molecule Scenarios
+* **`default`**: Validates the core role installation, bootstrap, and basic BDD requirements.
+* **`integration-postgres`**: Advanced scenario for testing dynamic secrets connectivity with real PostgreSQL instances.
+
+### BDD Validation (Gherkin)
+The role uses `pytest-bdd` to verify business requirements. It includes dynamic path resolution for CI compatibility:
+```python
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TOKEN_PATH = os.path.abspath(os.path.join(BASE_DIR, "../../../files/vault_init_output.json"))
+```
+
+---
+
+## 🧪 Testing Strategy
+
+This role uses a **Matrix Testing** approach to ensure reliability across different scopes.
+
+### **1. Port-Mapping Verification**
+To allow `pytest-bdd` (running on your Mac/Runner) to verify the integration, ports are published from Docker to `localhost`. This simulates a real application attempting to fetch secrets and connect to a database from outside the cluster.
+
+### **2. Execution Commands**
+```bash
+# Run the default smoke test
+molecule test -s default
+
+# Run the full PostgreSQL integration cycle
+molecule test -s integration-postgres
+```
+
+---
+
+## 🤖 CI/CD Automation (GitHub Actions)
+
+The repository includes a matrix-based workflow that runs all scenarios in parallel on a **Self-Hosted macOS Runner**.
+
+```yaml
+strategy:
+  fail-fast: false
+  matrix:
+    scenario: [default, integration-postgres]
+steps:
+  - name: Run Molecule Scenario
+    run: molecule test -s ${{ matrix.scenario }}
 ```
 
 
-###### 2. La Plantilla de Credenciales (DB_ROLE)
+### Execution Commands
+```bash
+# Full test cycle (Recommended for CI)
+molecule test
 
-Función: Creamos el rol runner_role. Esto no es un usuario, es una receta. Define el SQL exacto que Vault ejecutará cuando le pidan credenciales, y cuánto tiempo vivirán esas credenciales (1 hora).
-
-Por qué es vital: Aquí limitamos el daño. El SQL define que los usuarios creados solo tendrán permisos de SELECT, INSERT, UPDATE, y no podrán, por ejemplo, borrar tablas (DROP).
-
-```YAML
-
-# --- Código Ansible: Definir la receta SQL ---
-- name: 1.4 Crear el Rol 'runner_role' para credenciales temporales
-  community.hashi_vault.vault_write:
-    # ...
-    path: database/roles/runner_role
-    data:
-      db_name: postgresql
-      creation_statements: |
-        CREATE ROLE "{{name}}" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}';
-        GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO "{{name}}";
-      default_ttl: "1h"
-      max_ttl: "24h"
-    # ... (vars para escapar las llaves)
+# Fast development feedback
+molecule converge    # Apply changes
+molecule idempotence # Check for redundant changes
+molecule verify      # Run BDD tests
 ```
 
-#### Parte 2: El Lado de la Autenticación (La Llave y el Permiso)
-Aquí definimos quién puede entrar y qué se le permite hacer una vez dentro.
+---
 
-###### 3. El Método de Autenticación (AUTH_METHOD) y la Identidad (APPROLE)
+## 🛡️ Security Note
 
-Función: Habilitamos AppRole (Tarea 2.2), que es el estándar para autenticación de máquinas. Luego, creamos una identidad específica llamada ci-runner (Tarea 2.3).
 
-Por qué es vital: Esta es la credencial que sustituye al Root Token. Tu Runner de GitHub usará un RoleID y un SecretID asociados a este ci-runner para hacer "login" en Vault.
+The files generated in `roles/vault_server/files/` (`vault_init_output.json`, `ci_runner_secret_id.txt`) contain **plain-text secrets**. 
 
-```YAML
+1. *Ephemeral Secrets**: Master keys (`vault_init_output.json`) are generated during the `bootstrap` phase and stored locally in `files/`.
+2.  **Git Hygiene**: The `files/` directory is explicitly excluded in `.gitignore` to prevent accidental leakage of Root Tokens.
+3.  In production, use **Ansible Vault** to encrypt sensitive artifacts.
+4.  **AppRole Identities**: Encourages `RoleID` and `SecretID` for machine-to-machine authentication, avoiding long-lived root tokens.
 
-# --- Código Ansible: Habilitar AppRole y crear la identidad ci-runner ---
-- name: 2.2 Habilitar el método de autenticación AppRole
-  community.hashi_vault.vault_write:
-    # ...
-    path: sys/auth/approle
-    data:
-      type: approle
 
-- name: 2.3 Crear el AppRole 'ci-runner' y vincular la política
-  community.hashi_vault.vault_write:
-    # ...
-    path: auth/approle/role/ci-runner
-    data:
-      policies: ["runner-policy"] # <-- ¡Aquí se vincula la política!
-      # ... (TTLs)
-```
+---
+**Maintained by:** Luis Iglesias - Thought Partner: Gemini.
 
-
-###### 4. El Firewall de Permisos: La Política (POLICY)
-
-Función: Creamos la política runner-policy. Esta es la pieza de seguridad más importante. Es una lista blanca muy estricta.
-
-Por qué es vital: Fíjate en el código. Solo permite read en UNA ruta específica: database/creds/runner_role. Si un atacante roba las credenciales del runner, solo podrá pedir usuarios de base de datos. No podrá leer otros secretos, ni cambiar configuraciones, ni usar el token root. Es el principio de mínimo privilegio aplicado.
-
-```YAML
-
-# --- Código Ansible: Definir la política de permisos mínimos ---
-- name: 2.1 Crear la política 'runner-policy' (solo permisos de lectura)
-  community.hashi_vault.vault_write:
-    # ...
-    path: sys/policy/runner-policy
-    data:
-      policy: |
-        path "database/creds/runner_role" {
-          capabilities = ["read"]
-        }
-        # ... (revoke capability)
-```
-
-##### Resumen del Flujo Futuro (Cómo funcionará en producción)
-Una vez que este Ansible ha terminado su trabajo, el flujo en tu pipeline de CI/CD será el siguiente:
-
-Autenticación: Tu Runner de GitHub "llamará a la puerta" de Vault usando las credenciales del AppRole ci-runner (Tarea 2.3).
-
-Autorización: Vault le dejará pasar y le asignará un token temporal que tiene pegada la política runner-policy (Tarea 2.1).
-
-Petición: El Runner, usando ese token, pedirá: "Necesito credenciales para la base de datos", intentando leer la ruta database/creds/runner_role.
-
-Ejecución: Vault comprobará la política. Como está permitido, Vault irá a la "receta" runner_role (Tarea 1.4), usará la conexión admin (Tarea 1.3) para conectarse a PostgreSQL, creará un usuario temporal con el SQL definido, y le devolverá el usuario y contraseña al Runner.
-
-
-
-### Parte 2: Extracción y Almacenamiento Seguro de Credenciales AppRole
-
-Esta sección se encarga de interactuar con la API de Vault para obtener el RoleID y generar un nuevo SecretID dinámico, extrayendo y almacenando estas credenciales de forma segura para su uso posterior por el sistema de CI/CD.
-
-Vemos como automatizar el proceso de obtención de las credenciales de AppRole (RoleID público y SecretID sensible) desde Vault y su almacenamiento en el sistema de archivos local, preparando el entorno para la autenticación de máquinas.
-
-**Diagrama de Flujo de Datos:**
-```mermaid
-
-graph TD
-    %% Estilos
-    classDef ansible fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:black;
-    classDef vault fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:black;
-    classDef filesystem fill:#eceff1,stroke:#546e7a,stroke-width:2px,color:black;
-    classDef variable fill:#dcedc8,stroke:#689f38,stroke-width:1px,stroke-dasharray: 5 5,color:black;
-
-    subgraph "CONTROLADOR ANSIBLE (localhost)"
-        
-        subgraph "TAREA 3: Obtener Credenciales de Vault"
-            T3_1[/"3.1 Leer RoleID\n(vault_read)"/]:::ansible
-            T3_2[/"3.2 Generar SecretID\n(vault_write)"/]:::ansible
-        end
-
-        subgraph "Variables en Memoria de Ansible"
-            VAR_ROLE[("ci_runner_role_id\n(Estructura JSON compleja)")]:::variable
-            VAR_SECRET[("ci_runner_secret_id\n(Estructura JSON compleja)")]:::variable
-        end
-
-        subgraph "TAREA 4: Exportar a Archivos Locales"
-            T4_0[/"4.0 Asegurar Directorio\n(file: state=directory)"/]:::ansible
-            T4_1[/"4.1 Guardar RoleID.txt\n(copy content=...)"/]:::ansible
-            T4_2[/"4.2 Guardar SecretID.txt\n(copy content=...)"/]:::ansible
-        end
-    end
-
-    subgraph "SERVIDOR VAULT (API)"
-        API_ROLE_ID["/auth/approle/role/ci-runner/role-id"]:::vault
-        API_SECRET_ID["/auth/approle/role/ci-runner/secret-id"]:::vault
-    end
-
-    subgraph "SISTEMA DE FICHEROS LOCAL (Producción: root owned)"
-        FS_DIR["Directorio: ../files/"]:::filesystem
-        FILE_ROLE["📄 ci_runner_role_id.txt"]:::filesystem
-        FILE_SECRET["📄 ci_runner_secret_id.txt\n(⚠️ SENSIBLE)"]:::filesystem
-    end
-
-    %% Relaciones TAREA 3
-    T3_1 --> API_ROLE_ID
-    API_ROLE_ID -- VAR_ROLE
-    
-    T3_2 --> API_SECRET_ID
-    API_SECRET_ID -- VAR_SECRET
-
-    %% Relaciones TAREA 4
-    T4_0 --> FS_DIR
-    
-    VAR_ROLE -- T4_1
-    T4_1 --> FILE_ROLE
-    
-    VAR_SECRET -- T4_2
-    T4_2 --> FILE_SECRET
-
-    %% Dependencias de Ficheros
-    FS_DIR -.-> FILE_ROLE
-    FS_DIR -.-> FILE_SECRET
-
-    %% Leyenda
-    subgraph Leyenda
-        L1(Tarea de Ansible):::ansible
-        L2(Ruta API Vault):::vault
-        L3(Elemento en Disco):::filesystem
-        L4(Variable en Memoria):::variable
-    end
-
-```
-
-**Explicación de Tareas:**
-📝 Detalle de las Actividades
-TAREA 3: Obtener las Credenciales desde Vault
-Esta fase se encarga de interactuar con la API de Vault para conseguir los identificadores en crudo.
-
-3.1. Obtener el RoleID (El Identificador Público)
-
-Qué hace: Lee una ruta específica en Vault donde siempre está disponible el ID fijo del rol ci-runner. Es una operación de lectura (vault_read), no cambia nada en Vault.
-
-Resultado: Guarda toda la respuesta JSON de Vault en la variable ci_runner_role_id.
-
-```YAML
-
-- name: 3.1 Obtener RoleID del AppRole 'ci-runner'
-  community.hashi_vault.vault_read:
-    # ... conexión ...
-    path: auth/approle/role/ci-runner/role-id
-  register: ci_runner_role_id
-  # ...
-```
-
-3.2. Generar y obtener SecretID (La Contraseña Dinámica)
-
-Qué hace: A diferencia del RoleID, el SecretID no "existe" hasta que se pide. Esta tarea escribe (vault_write) en una ruta especial que le indica a Vault: "¡Genera una nueva contraseña para este rol ahora mismo!".
-
-Resultado: Vault crea un SecretID nuevo (con un tiempo de vida de 1 hora, según configuramos antes) y devuelve sus detalles en un JSON, que Ansible guarda en la variable ci_runner_secret_id.
-
-```YAML
-
-- name: 3.2 Generar y obtener SecretID del AppRole 'ci-runner'
-  community.hashi_vault.vault_write:
-    # ... conexión ...
-    path: auth/approle/role/ci-runner/secret-id
-  register: ci_runner_secret_id
-  # ...
-```
-
-TAREA 4: Exportar y Guardar en Disco (Entorno de Producción)
-Esta fase toma los datos complejos en memoria y los convierte en archivos de texto plano utilizables. Se ejecuta con privilegios elevados (become: true implícito en tu configuración), por lo que los archivos resultantes pertenecerán a root.
-
-4.0. Asegurar el Directorio de Destino
-
-Qué hace: Antes de intentar escribir archivos, se asegura de que la carpeta contenedora (../files) exista.
-
-Por qué es importante: Evita que el playbook falle si es la primera vez que se ejecuta en un entorno limpio. Al ejecutarse con sudo, si la carpeta no existe, la creará como propiedad de root.
-
-```YAML
-
-- name: 4.0 Asegurar que existe el directorio 'files' en la raíz
-  ansible.builtin.file:
-    path: "{{ playbook_dir }}/../files"
-    state: directory
-    mode: '0755'
-  # ...
-```
-
-4.1 y 4.2. Guardar RoleID y SecretID
-
-Qué hacen: Estas tareas usan el módulo copy para crear archivos de texto. La parte crucial es cómo extraen la información. Como descubrimos en el debug, las variables de Ansible contienen una estructura JSON anidada. Usamos la notación de punto variable.data.data.valor para navegar hasta el dato exacto que necesitamos.
-
-Seguridad (Producción): Los archivos se crean como root. Esto es bueno en un servidor real, ya que impide que usuarios no privilegiados lean el SecretID. En tu Mac, tendrás que usar sudo cat ... para ver su contenido.
-
-⚠️ Advertencia Crítica: El archivo ci_runner_secret_id.txt contiene una credencial de alto privilegio en texto plano. Este es un paso intermedio necesario para llevarlo a la CI/CD, pero este archivo nunca debe quedar expuesto o subirse al control de versiones.
-
-```YAML
-
-- name: 4.1 Guardar RoleID en un archivo local para uso en la CI
-  ansible.builtin.copy:
-    # Navegamos la estructura JSON para obtener solo la cadena del ID
-    content: "{{ ci_runner_role_id.data.data.role_id }}"
-    dest: "{{ playbook_dir }}/../files/ci_runner_role_id.txt"
-    # ...
-
-- name: 4.2 Guardar SecretID en un archivo local (REQUIERE CIFRADO)
-  ansible.builtin.copy:
-    # Navegamos la estructura JSON para obtener solo la cadena del ID
-    content: "{{ ci_runner_secret_id.data.data.secret_id }}"
-    dest: "{{ playbook_dir }}/../files/ci_runner_secret_id.txt"
-    # ...
-
-```
-
-## Archivos Generados
-
-Este role generará los siguientes archivos en el controlador de Ansible (en la carpeta `files/` del proyecto raíz):
-
-* `ci_runner_role_id.txt`: Identificador público del rol.
-* `ci_runner_secret_id.txt`: **(SENSIBLE)** Contraseña dinámica para el rol. Pertenecerá a root en entornos de producción.
-
-
-
-
-
-# Actualizar el CI/CD con AppRole
-
-Hasta ahora, tu workflow de CI/CD probablemente se autentica con el Token Root, que es una práctica de seguridad muy pobre. Vamos a sustituirlo por el RoleID y SecretID que acabamos de generar.Paso 1: Obtener las CredencialesLocaliza los dos archivos que Ansible creó en tu directorio files/ (o en la raíz del playbook, dependiendo de dónde estabas cuando lo ejecutaste):RoleID (público):Bashcat files/ci_runner_role_id.txt
-# Ejemplo: a2b3c4d5-e6f7-8901-2345-67890abcdef0
-SecretID (secreto):Bashcat files/ci_runner_secret_id.txt
-# Ejemplo: 0fedcba9-8765-4321-fecb-a9876543210f
-Copia estos dos valores.Paso 2: Configurar los Secretos en GitHubDebes añadir estos dos valores como secretos en tu repositorio de GitHub, al igual que hiciste con el Token Root y la llave de desbloqueo.Ve a Settings de tu repositorio.Navega a Security > Secrets and variables > Actions.Crea dos nuevos secretos del repositorio:Nombre del Secreto (Nuevo)ValorVAULT_ROLE_IDPega el contenido de ci_runner_role_id.txtVAULT_SECRET_IDPega el contenido de ci_runner_secret_id.txt
-
-Despues de esto acualizamos el workflow de github (bdd_test.yml) para que use esos secretos

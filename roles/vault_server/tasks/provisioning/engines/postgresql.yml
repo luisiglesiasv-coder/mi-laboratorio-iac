@@ -1,52 +1,47 @@
 ---
-# roles/vault_server/tasks/engines/postgresql.yml
+# tasks/provisioning/engines/postgresql.yml
 
-- name: PSQL-1.1 Get current mounts from Vault
-  ansible.builtin.uri:
-    url: "{{ vault_addr }}/v1/sys/mounts"
-    method: GET
-    headers:
-      X-Vault-Token: "{{ vault_creds['root_token'] }}"
+- name: PSQL | Check if database engine is already mounted
+  community.hashi_vault.vault_read:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "sys/mounts"
   register: vault_mounts
+  changed_when: false
 
-- name: PSQL-1.2 Enable Database engine at 'database/' path
-  ansible.builtin.uri:
-    url: "{{ vault_addr }}/v1/sys/mounts/database"
-    method: POST
-    headers:
-      X-Vault-Token: "{{ vault_creds['root_token'] }}"
-    body_format: json
-    body:
+- name: PSQL | Enable Database secrets engine at 'database/'
+  community.hashi_vault.vault_write:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "sys/mounts/database"
+    data:
       type: "database"
       description: "Dynamic credentials for SQL databases"
-    status_code: [200, 204]
-  when: "'database/' not in vault_mounts.json"
+  # Solo se ejecuta si 'database/' no aparece en la lista de mounts
+  when: "'database/' not in vault_mounts.data"
 
-- name: PSQL-2.1 Configure PostgreSQL connection
-  ansible.builtin.uri:
-    url: "{{ vault_addr }}/v1/database/config/postgresql"
-    method: POST
-    headers:
-      X-Vault-Token: "{{ vault_creds['root_token'] }}"
-    body_format: json
-    body:
+- name: PSQL | Configure PostgreSQL connection
+  community.hashi_vault.vault_write:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "database/config/postgresql"
+    data:
       plugin_name: "postgresql-database-plugin"
       allowed_roles: "readonly-role"
-      connection_url: "postgresql://{{ db_user }}:{{ db_password }}@{{ db_host }}:{{ db_port }}/{{ db_name }}?sslmode=disable"
-    status_code: [200, 204]
+      # Usamos tus variables de group_vars/all.yml
+      connection_url: "postgresql://{% raw %}{{username}}:{{password}}{% endraw %}@{{ db_host }}:{{ db_port }}/{{ db_name }}?sslmode=disable"
+      username: "{{ db_user }}"
+      password: "{{ db_password }}"
 
-- name: PSQL-3.1 Create a Dynamic Role (Read-Only)
-  ansible.builtin.uri:
-    url: "{{ vault_addr }}/v1/database/roles/readonly-role"
-    method: POST
-    headers:
-      X-Vault-Token: "{{ vault_creds['root_token'] }}"
-    body_format: json
-    body:
+- name: PSQL | Create a Dynamic Role (Read-Only)
+  community.hashi_vault.vault_write:
+    url: "{{ vault_addr }}"
+    token: "{{ vault_root_token_mem }}"
+    path: "database/roles/readonly-role"
+    data:
       db_name: "postgresql"
       creation_statements: 
-        - "CREATE ROLE \"{{ '{{' }}name{{ '}}' }}\" WITH LOGIN PASSWORD '{{ '{{' }}password{{ '}}' }}' VALID UNTIL '{{ '{{' }}expiration{{ '}}' }}';"
-        - "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{ '{{' }}name{{ '}}' }}\";"
+        - "CREATE ROLE \"{% raw %}{{name}}{% endraw %}\" WITH LOGIN PASSWORD '{% raw %}{{password}}{% endraw %}' VALID UNTIL '{% raw %}{{expiration}}{% endraw %}';"
+        - "GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{% raw %}{{name}}{% endraw %}\";"
       default_ttl: "1h"
       max_ttl: "24h"
-    status_code: [200, 204]

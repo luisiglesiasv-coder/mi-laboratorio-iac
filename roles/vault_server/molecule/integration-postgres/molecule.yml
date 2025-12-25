@@ -1,16 +1,14 @@
----
 # roles/vault_server/molecule/integration-postgres/molecule.yml
-# Orchestrated scenario for Vault + PostgreSQL Integration
-
 dependency:
   name: galaxy
-  enabled: false # avoid SSL error in Mac
+  enabled: false
 driver:
   name: docker
 
 platforms:
-  - name: vault-instance
-    image: geerlingguy/docker-ubuntu2204-ansible:latest
+  - name: vault-integration
+    image: molecule_local/geerlingguy/docker-ubuntu2204-ansible:latest
+    pre_build_image: true
     privileged: true
     command: /sbin/init
     capabilities:
@@ -18,33 +16,39 @@ platforms:
     volumes:
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
     cgroupns_mode: host
+    # Map Vault API port to the Mac to allow Pytest-BDD (running on localhost) 
+    # to communicate with the Vault service inside the container.
+    published_ports:
+      - 0.0.0.0:8200:8200/tcp
     networks:
       - name: vault-lab-net
 
-  - name: postgres-instance
+  - name: postgres-db
     image: postgres:15-alpine
     pre_build_image: true
-    command: postgres
+    command: ["postgres"]
+    # Usernames matching the provisioning task
     env:
       POSTGRES_USER: vault_admin
       POSTGRES_PASSWORD: admin_password
       POSTGRES_DB: my_app_db
+    # Map PostgreSQL port to the Mac to allow the test suite to verify 
+    # dynamic credential connectivity from the host machine.
+    published_ports:
+      - 0.0.0.0:5432:5432/tcp
     networks:
       - name: vault-lab-net
 
 provisioner:
   name: ansible
   env:
-    # Anchor Ansible to the project's roles directory
     ANSIBLE_ROLES_PATH: ../../../
-  # --- SHARED LOGIC REDIRECTION ---
+    ANSIBLE_COLLECTIONS_PATH: ../../../../collections
   playbooks:
     cleanup: ../_shared/cleanup.yml
-  # --------------------------------
   config_options:
     defaults:
-      host_key_checking: false
       interpreter_python: auto_silent
 
 verifier:
-  name: ansible
+  name: testinfra # Aligned with default scenario (BDD)
