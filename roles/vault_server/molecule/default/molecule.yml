@@ -13,8 +13,8 @@ platforms:
     capabilities: [IPC_LOCK]
     volumes: ["/sys/fs/cgroup:/sys/fs/cgroup:rw"]
     cgroupns_mode: host
-    published_ports:
-      - 8200:8200
+    # published_ports:
+    #  - 8200:8200
 provisioner:
   name: ansible
   env:
