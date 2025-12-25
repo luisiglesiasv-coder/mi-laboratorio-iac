@@ -5,11 +5,12 @@ import json
 import os
 from pytest_bdd import scenario, given, when, then
 
-# --- CONFIGURACIÓN DE RUTAS DINÁMICAS (Para portabilidad Mac/GitHub) ---
-# Detectamos la ubicación de este archivo y subimos 4 niveles para llegar a la raíz del rol
-# tests/ -> integration-postgres/ -> molecule/ -> vault_server/
+# --- LÓGICA DE RUTAS DINÁMICAS ---
+# Calculamos la ruta al JSON basándonos en la ubicación de este archivo de test
+# Estructura: molecule/default/tests/test_vault_bdd.py -> ../../../files/
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-TOKEN_PATH = os.path.normpath(os.path.join(BASE_DIR, "../../../../files/vault_init_output.json"))
+TOKEN_PATH = os.path.abspath(os.path.join(BASE_DIR, "../../../files/vault_init_output.json"))
+
 
 # Parámetros de conexión (Usamos localhost por el published_ports en molecule.yml)
 VAULT_ADDR = "http://localhost:8200"
