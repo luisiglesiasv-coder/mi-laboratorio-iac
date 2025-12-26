@@ -1,0 +1,5 @@
+---
+- name: Deploy Nexus Repository with Docker and NFS
+  hosts: nexusservers  # Usamos el nuevo grupo lógico
+  roles:
+    - role: ../roles/nexus  # Subimos un nivel para encontrar la carpeta roles

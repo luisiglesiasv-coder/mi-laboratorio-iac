@@ -1,0 +1,22 @@
+---
+# roles/nexus/defaults/main.yml
+
+# Versión de Nexus
+nexus_version: "3.70.1"
+
+# 📡 Configuración NAS
+nexus_nas_ip: "10.0.0.5"
+nexus_nas_path: "/mnt/HD/HD_a2/nexus_data"
+
+# 📂 Punto de montaje local (Este ya te funciona)
+nexus_mount_point: "/mnt/nexus_data"
+
+# 🐳 Configuración del contenedor Nexus
+nexus_image: "sonatype/nexus3:{{ nexus_version }}"
+nexus_container_name: "nexus-server"
+nexus_memory_limit: "4g"
+
+# 🆔 Mapeo de Usuario NAS (Cosmético)
+# Define qué ID usa tu NAS para que Linux sepa ponerle nombre
+nexus_nas_uid: 501
+nexus_nas_user: "nas-admin"
