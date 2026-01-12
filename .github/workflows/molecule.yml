@@ -7,8 +7,8 @@ on:
 
 jobs:
   molecule:
-    # 'macOS' es la etiqueta de tu runner self-hosted
-    runs-on: [self-hosted, macOS]
+    # es la etiqueta de tu runner self-hosted
+    runs-on: [self-hosted, Linux, X64]
     strategy:
       fail-fast: false # Permite que si falla uno, el otro intente terminar
       max-parallel: 1
