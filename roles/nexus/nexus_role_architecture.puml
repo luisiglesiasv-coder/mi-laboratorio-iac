@@ -1,0 +1,86 @@
+@startuml
+' Configuración de estilos manual
+skinparam componentStyle uml2
+skinparam shadowing false
+skinparam handwritten false
+skinparam roundcorner 5
+skinparam backgroundColor white
+
+' Definición de colores
+skinparam node {
+    BackgroundColor White
+    BorderColor #0077BE
+    FontColor Black
+}
+skinparam component {
+    BackgroundColor #E1F5FE
+    BorderColor #0277BD
+    FontColor Black
+}
+skinparam interface {
+    BackgroundColor Black
+    BorderColor Black
+}
+skinparam database {
+    BackgroundColor #E1F5FE
+    BorderColor #0277BD
+}
+skinparam note {
+    BackgroundColor #FFF9C4
+    BorderColor #FBC02D
+}
+
+title Nexus Role Architecture
+
+' Actores y Clientes
+actor "SysAdmin / Ansible" as Admin
+cloud "Lab Clients\n(Runners, DB Nodes)" as Clients
+
+' Infraestructura Externa (NAS)
+node "NAS Server (Storage)" as NAS {
+    database "NFS Export\n/volume1/nexus_data" as NAS_Data
+}
+
+' El Servidor Nexus (Host)
+node "Nexus Host (Ubuntu)" as Host {
+    
+    package "Operating System" {
+        folder "Local Mount\n/mnt/nexus_data" as Local_Mount
+        interface "NFS Client" as NFS_Client
+    }
+
+    ' CAMBIO AQUÍ: Usamos 'rectangle' en lugar de 'rect'
+    rectangle "Docker Runtime" {
+        component "Sonatype Nexus 3\n(Container)" as NexusContainer {
+            port "8081" as P8081_Int
+            port "8082" as P8082_Int
+            folder "/nexus-data" as Vol_Int
+        }
+    }
+    
+    port "Host Port: 8081" as P8081_Ext
+    port "Host Port: 8082" as P8082_Ext
+}
+
+' Relaciones de Despliegue
+Admin ..> Host : SSH (Deploy Role)
+
+' Relaciones de Almacenamiento
+NFS_Client --> NAS_Data : NFS Protocol\n(rw,hard,noatime)
+Local_Mount -up-> NFS_Client
+Vol_Int ..> Local_Mount : Docker Volume\nBind Mount
+
+' Relaciones de Red (Puertos)
+P8081_Ext <--> P8081_Int : Map
+P8082_Ext <--> P8082_Int : Map
+
+' Flujo de Tráfico
+Clients --> P8081_Ext : HTTP (Web UI, PyPI, Maven)
+Clients --> P8082_Ext : HTTP (Docker Registry Mirror)
+
+note right of P8082_Ext
+  Dedicated Port for
+  Docker Connector
+end note
+
+@enduml

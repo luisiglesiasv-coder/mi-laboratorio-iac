@@ -1,0 +1,10 @@
+# group_vars/all.yml
+nexus_ip: "runner-node.local"
+nexus_port: "8081"
+nexus_url: "http://{{ nexus_ip }}:{{ nexus_port }}"
+
+# IMPORTANTE: Esto es lo que cambiará el daemon.json
+nexus_docker_port: "8082"
+nexus_docker_url: "http://{{ nexus_ip }}:{{ nexus_docker_port }}/"
+
+nexus_pypi_url: "{{ nexus_url }}/repository/pypi-proxy/simple"

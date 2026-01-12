@@ -1,0 +1,24 @@
+---
+# roles/common/tasks/main.yml
+
+- name: 0.1 Create Docker configuration directory
+  file:
+    path: /etc/docker
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: 0.2 Configure Docker to use Nexus Mirror
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    mode: '0644'
+  become: true
+  notify: Restart Docker  # <--- Esto buscará en la carpeta 'handlers' automáticamente
+
+- name: 0.3 Configure global PIP to use Nexus Proxy
+  template:
+    src: pip.conf.j2
+    dest: /etc/pip.conf
+    mode: '0644'
+  become: true

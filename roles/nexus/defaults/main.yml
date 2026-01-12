@@ -14,7 +14,7 @@ nexus_mount_point: "/mnt/nexus_data"
 # 🐳 Configuración del contenedor Nexus
 nexus_image: "sonatype/nexus3:{{ nexus_version }}"
 nexus_container_name: "nexus-server"
-nexus_memory_limit: "4g"
+nexus_memory_limit: "5g"
 
 # 🆔 Mapeo de Usuario NAS (Cosmético)
 # Define qué ID usa tu NAS para que Linux sepa ponerle nombre

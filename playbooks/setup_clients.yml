@@ -1,0 +1,5 @@
+# playbooks/setup_clients.yml
+- hosts: lab_clients
+  become: true
+  roles:
+    - ../roles/common
