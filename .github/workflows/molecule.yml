@@ -20,11 +20,21 @@ jobs:
       - name: 1. Checkout repository
         uses: actions/checkout@v4
 
+      # 🟢 CAMBIO IMPORTANTE: Creamos un entorno virtual (burbuja)
       - name: 2. Prepare Python Environment
         run: |
-          python3 -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # 1. Crear la burbuja en la carpeta .venv
+          python3 -m venv .venv
+          
+          # 2. Truco de GitHub: Añadimos la burbuja al PATH para el resto de pasos
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          
+          # 3. Instalamos dentro de la burbuja
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
 
+      # A partir de aquí, "ansible-galaxy", "molecule", etc. usarán la burbuja automáticamente
+      
       - name: 3. Install Ansible Dependencies
         run: |
           ansible-galaxy collection install -r requirements.yml -p ./collections
@@ -32,6 +42,7 @@ jobs:
       - name: 4. Run Molecule Scenario
         run: |
           cd roles/vault_server
+          # Aquí ya está usando el python del entorno virtual
           molecule test -s ${{ matrix.scenario }}
         env:
           PY_COLORS: '1'
