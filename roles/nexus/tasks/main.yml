@@ -79,15 +79,15 @@
     state: directory
     mode: '0777'
 
-- name: 1.3 Mount NAS shared folder (Ethernet Stable Mode)
+- name: 1.3 Mount NAS shared folder (Standard NFS)
   become: true
-  mount:
+  ansible.posix.mount:
     path: "{{ nexus_mount_point }}"
     src: "{{ nexus_nas_ip }}:{{ nexus_nas_path }}"
     fstype: nfs
-    # We use standard and robust options for Ethernet connection
     opts: rw,hard,noatime
     state: mounted
+
 
 # ==========================================
 # SECTION 2: Nexus Container Deployment
@@ -99,16 +99,18 @@
   shell: docker rm -f {{ nexus_container_name }}
   ignore_errors: yes
 
-- name: 2.4 Run Sonatype Nexus 3 Container
+- name: 2.4 Run Sonatype Nexus 3 Container (As Agent 501:1000)
   become: true
   shell: |
     docker run -d \
       --name {{ nexus_container_name }} \
       --restart always \
+      --stop-timeout 120 \
       --memory {{ nexus_memory_limit }} \
+      --user {{ nexus_nas_uid }}:{{ nexus_nas_gid }} \
       -p 8081:8081 \
       -p 8082:8082 \
       -v {{ nexus_mount_point }}:/nexus-data \
-      {{ nexus_image }} 
-
+      {{ nexus_image }}
+  # Nota: Usamos 1000 porque 'ls -ln' mostró que los archivos pertenecen al grupo 1000
   # Note: Added -p 8082:8082 for the dedicated Docker connector port
