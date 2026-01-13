@@ -21,3 +21,5 @@ redis              # Connection utility for Redis (if used in other scenarios)
 molecule>=6.0.0
 molecule-plugins[docker]>=2.3.0
 molecule-plugins[testinfra]>=0.0.1
+# 🔴 EL CAMBIO CLAVE: Fijamos docker a una versión estable pre-7.0
+docker==6.1.3
