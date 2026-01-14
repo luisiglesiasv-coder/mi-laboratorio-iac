@@ -85,7 +85,7 @@
     path: "{{ nexus_mount_point }}"
     src: "{{ nexus_nas_ip }}:{{ nexus_nas_path }}"
     fstype: nfs
-    opts: rw,hard,noatime
+    opts: rw,hard,noatime,_netdev
     state: mounted
 
 
