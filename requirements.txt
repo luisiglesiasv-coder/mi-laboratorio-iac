@@ -1,25 +1,26 @@
-# requirements.txt
+# requirements.txt - Golden Image from Mac Environment
 
 # --- 1. Infrastructure as Code ---
-ansible==9.1.0  # Ansible 9.1.0 includes ansible-core 2.16
+ansible==9.1.0
 
 # --- 2. Testing & BDD Frameworks ---
 pytest==8.4.2
 pytest-bdd==8.1.0
 pytest-testinfra==10.1.1
-# behave==1.2.6  # Only required if using the standalone 'behave' executable
 
-# --- 3. Connection, Security & Database Utilities ---
-requests
-urllib3<2.0        # Fixes NotOpenSSLWarning/SSL compatibility on macOS runners
-PyYAML             # Required for Ansible and Molecule configuration parsing
-psycopg2-binary    # PostgreSQL adapter for integration testing (robust binary version)
-hvac               # Official Python client for HashiCorp Vault API
-redis              # Connection utility for Redis (if used in other scenarios)
+# --- 3. The "Golden Trinity" for Docker Compatibility ---
+# Estas tres versiones deben ir juntas para evitar el error http+docker
+requests==2.31.0
+urllib3==1.26.20
+docker==6.1.3
+websocket-client==1.9.0  # Dependencia clave de docker
 
-# --- 4. Molecule & Orchestration ---
+# --- 4. Utilities ---
+PyYAML==6.0.3
+psycopg2-binary==2.9.11
+hvac==2.4.0
+redis==7.1.0
+
+# --- 5. Molecule ---
 molecule>=6.0.0
 molecule-plugins[docker]>=2.3.0
-molecule-plugins[testinfra]>=0.0.1
-# 🔴 EL CAMBIO CLAVE: Fijamos docker a una versión estable pre-7.0
-docker==6.1.3
