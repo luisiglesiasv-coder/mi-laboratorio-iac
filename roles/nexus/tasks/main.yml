@@ -1,4 +1,3 @@
----
 # roles/nexus/tasks/main.yml
 
 # ==========================================
@@ -79,15 +78,44 @@
     state: directory
     mode: '0777'
 
-- name: 1.3 Mount NAS shared folder (Standard NFS)
+- name: 1.3 Mount NAS shared folder (Standard NFS with Systemd Automount)
   become: true
   ansible.posix.mount:
     path: "{{ nexus_mount_point }}"
     src: "{{ nexus_nas_ip }}:{{ nexus_nas_path }}"
     fstype: nfs
-    opts: rw,hard,noatime,_netdev
+    # UPDATED: Added x-systemd options for robustness and removed double comma typo
+    opts: rw,hard,noatime,_netdev,x-systemd.automount,x-systemd.device-timeout=10,timeo=14
     state: mounted
 
+# --- NEW BLOCK: Docker & Mount Dependency Logic ---
+
+- name: 1.4 Ensure Docker systemd override directory exists
+  become: true
+  file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: '0755'
+
+- name: 1.5 Configure Docker to wait for Nexus NFS mount (Prevent Race Condition)
+  become: true
+  copy:
+    dest: /etc/systemd/system/docker.service.d/override.conf
+    # Important: Assumes mount unit name is mnt-nexus_data.mount based on /mnt/nexus_data path
+    content: |
+      [Unit]
+      After=mnt-nexus_data.mount
+      Wants=mnt-nexus_data.mount
+    mode: '0644'
+  register: docker_override
+
+- name: 1.6 Apply Systemd changes and Restart Docker if config changed
+  become: true
+  systemd:
+    name: docker
+    state: restarted
+    daemon_reload: yes
+  when: docker_override.changed
 
 # ==========================================
 # SECTION 2: Nexus Container Deployment
